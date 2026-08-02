@@ -1,0 +1,12 @@
+--- a/app/GameExperience.tsx
++++ b/app/GameExperience.tsx
+@@ -10330,7 +10330,8 @@
+       this.animationFrame = requestAnimationFrame(this.frame);
+       return;
+     }
+-    const rawDelta = Math.min((time - this.lastTime) / 1000, 0.08);
++    const measuredDelta = (time - this.lastTime) / 1000;
++    const rawDelta = Number.isFinite(measuredDelta) ? THREE.MathUtils.clamp(measuredDelta, 0, 0.08) : 0;
+     this.lastTime = time;
+     this.accumulator += rawDelta;
+     this.elapsed += rawDelta;
