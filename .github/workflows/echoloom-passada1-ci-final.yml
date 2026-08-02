@@ -75,8 +75,18 @@ jobs:
             payload/chunk-30 \
             payload/chunk-32 \
             | tr -d '\r\n' \
-            | base64 --decode \
-            > echoloom-source.tar.xz
+            > echoloom-source.with-duplicate.b64
+
+          python - <<'PY'
+          from pathlib import Path
+          source = Path('echoloom-source.with-duplicate.b64').read_text()
+          assert len(source) == 263352, len(source)
+          repaired = source[:76000] + source[78784:]
+          assert len(repaired) == 260568, len(repaired)
+          Path('echoloom-source.b64').write_text(repaired)
+          PY
+
+          base64 --decode echoloom-source.b64 > echoloom-source.tar.xz
 
           echo "00adaa6d1093f16dcf7e2eacc0efa41708f476032094a3011e8f558026d70c76  echoloom-source.tar.xz" \
             | sha256sum --check --strict
