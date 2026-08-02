@@ -1,0 +1,127 @@
+name: ECHOLOOM Vehicle Entry Final Package
+
+on:
+  push:
+    branches:
+      - echoloom-vehicle-entry-ci-20260802
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  verify-and-package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      CI: "true"
+      ECHOLOOM_CHROMIUM_PATH: /usr/bin/google-chrome
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout isolated branch
+        uses: actions/checkout@v4
+
+      - name: Recover approved movement and physics source
+        shell: bash
+        run: |
+          set -euxo pipefail
+          gh run download 30730827397 \
+            --repo "$GITHUB_REPOSITORY" \
+            --name echoloom-motion-physics-hostinger-final \
+            --dir prior-approved
+          SOURCE_ZIP="prior-approved/ECHOLOOM-CIDADE-DA-RUPTURA-CODIGO-FONTE-MOVIMENTO-FISICA-FINAL.zip"
+          test -f "$SOURCE_ZIP"
+          echo "89ff56ef25ef3fc2b7947b9806be0feaff3735416ec5cf24f07304d31bbb8f79  $SOURCE_ZIP" | sha256sum --check --strict
+          mkdir project
+          unzip -q "$SOURCE_ZIP" -d project
+          test -f project/app/GameExperience.tsx
+          test -f project/package-lock.json
+
+      - name: Apply vehicle entry fix
+        shell: bash
+        run: |
+          set -euxo pipefail
+          echo "7b0f2b4aade9deb1a2ba0c287b3f8b67c5e76d089470bbfd80b196669812516f  ci/vehicle-entry-fix.patch" | sha256sum --check --strict
+          cd project
+          patch --batch --forward -p1 < ../ci/vehicle-entry-fix.patch
+          rm -f app/*.orig scripts/*.orig tests/*.orig
+          grep -n '0.22.3-marco18.vehicle1' package.json package-lock.json public/LEIA-ME-HOSTINGER.txt
+          node --check scripts/browser-smoke.mjs
+          node --check tests/release-critical-regressions.test.mjs
+          sha256sum app/GameExperience.tsx package.json package-lock.json scripts/browser-smoke.mjs tests/release-critical-regressions.test.mjs > ../VEHICLE-ENTRY-SOURCE-HASHES.log
+
+      - name: Setup Node 22.13.1
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.1
+          cache: npm
+          cache-dependency-path: project/package-lock.json
+
+      - name: Pin npm and record environment
+        shell: bash
+        run: |
+          npm install --global npm@11.9.0
+          {
+            uname -a
+            node --version
+            npm --version
+            google-chrome --version || true
+            cat VEHICLE-ENTRY-SOURCE-HASHES.log
+          } | tee ENVIRONMENT-VEHICLE-ENTRY-FINAL.log
+
+      - name: Clean npm ci
+        working-directory: project
+        shell: bash
+        run: |
+          set -o pipefail
+          npm ci 2>&1 | tee ../NPM-CI-VEHICLE-ENTRY-FINAL.log
+
+      - name: Full release verification
+        working-directory: project
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run verify 2>&1 | tee ../VERIFY-VEHICLE-ENTRY-FINAL.log
+
+      - name: Package exact tested source
+        working-directory: project
+        run: npm run package:source
+
+      - name: Build final delivery
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p delivery
+          cp project/release/ECHOLOOM-CIDADE-DA-RUPTURA-MINHA-VERSAO-HOSTINGER-RC1-PASSADA-1.zip \
+            delivery/ECHOLOOM-CIDADE-DA-RUPTURA-HOSTINGER-VEICULO-V-FINAL.zip
+          cp project/release/ECHOLOOM-CIDADE-DA-RUPTURA-CODIGO-FONTE-RC1-PASSADA-1.zip \
+            delivery/ECHOLOOM-CIDADE-DA-RUPTURA-CODIGO-FONTE-VEICULO-V-FINAL.zip
+          cp ENVIRONMENT-VEHICLE-ENTRY-FINAL.log NPM-CI-VEHICLE-ENTRY-FINAL.log VERIFY-VEHICLE-ENTRY-FINAL.log VEHICLE-ENTRY-SOURCE-HASHES.log delivery/
+          cat > delivery/RELATORIO-VEICULO-V-FINAL.txt <<'EOF'
+          ECHOLOOM — CIDADE DA RUPTURA
+          Revisão 0.22.3-marco18.vehicle1
+
+          Correções:
+          - tecla V entra e sai do veículo durante o resgate do Prólogo;
+          - somente a zona inicial de queda bloqueia o veículo;
+          - distância de interação calculada no plano horizontal;
+          - raio de interação ajustado para 5,8 unidades;
+          - tecla V real validada em WebGPU e WebGL2 para entrada e saída;
+          - mira TPS, movimentação, pernas e física das rodas preservadas.
+          EOF
+          find delivery -maxdepth 1 -type f ! -name SHA256SUMS-VEICULO-V-FINAL.txt -print0 | sort -z | xargs -0 sha256sum > delivery/SHA256SUMS-VEICULO-V-FINAL.txt
+          unzip -t delivery/ECHOLOOM-CIDADE-DA-RUPTURA-HOSTINGER-VEICULO-V-FINAL.zip
+          unzip -p delivery/ECHOLOOM-CIDADE-DA-RUPTURA-HOSTINGER-VEICULO-V-FINAL.zip index.html >/dev/null
+
+      - name: Upload approved vehicle entry package
+        uses: actions/upload-artifact@v4
+        with:
+          name: echoloom-vehicle-entry-hostinger-final
+          path: delivery
+          if-no-files-found: error
+          retention-days: 7
