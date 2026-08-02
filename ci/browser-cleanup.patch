@@ -1,0 +1,45 @@
+--- a/scripts/browser-test-runtime.mjs
++++ b/scripts/browser-test-runtime.mjs
+@@ -317,12 +317,37 @@
+   async close() {
+     try { await this.connection.send("Browser.close"); } catch {}
+     this.connection.close();
+-    if (!this.processHandle.killed) this.processHandle.kill("SIGTERM");
+-    await new Promise((resolveExit) => {
+-      const timer = setTimeout(resolveExit, 2_000);
+-      this.processHandle.once("exit", () => { clearTimeout(timer); resolveExit(); });
++
++    const hasExited = () => this.processHandle.exitCode !== null || this.processHandle.signalCode !== null;
++    const waitForExit = (timeout) => new Promise((resolveExit) => {
++      if (hasExited()) {
++        resolveExit(true);
++        return;
++      }
++      const onExit = () => {
++        clearTimeout(timer);
++        resolveExit(true);
++      };
++      const timer = setTimeout(() => {
++        this.processHandle.removeListener("exit", onExit);
++        resolveExit(false);
++      }, timeout);
++      this.processHandle.once("exit", onExit);
++    });
++
++    if (!hasExited()) this.processHandle.kill("SIGTERM");
++    if (!(await waitForExit(3_000)) && !hasExited()) {
++      this.processHandle.kill("SIGKILL");
++      await waitForExit(2_000);
++    }
++
++    await delay(200);
++    await rm(this.userDataDir, {
++      recursive: true,
++      force: true,
++      maxRetries: 12,
++      retryDelay: 150,
+     });
+-    await rm(this.userDataDir, { recursive: true, force: true });
+   }
+ }
+ 
