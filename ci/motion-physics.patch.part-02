@@ -1,0 +1,173 @@
+-    const leftHeight = this.terrainHeight(car.position.x - rightX * 1.0, car.position.z - rightZ * 1.0);
+-    const rightHeight = this.terrainHeight(car.position.x + rightX * 1.0, car.position.z + rightZ * 1.0);
+-    car.position.y = centerHeight + 0.08;
+-    car.rotation.y = this.vehicleYaw;
+-    car.rotation.x = THREE.MathUtils.damp(car.rotation.x, Math.atan2(rearHeight - frontHeight, 3.4), 7, delta);
+-    car.rotation.z = THREE.MathUtils.damp(car.rotation.z, Math.atan2(leftHeight - rightHeight, 2.0) - steer * speedFactor * 0.08, 7, delta);
+-
+-    this.wheelSpin += this.vehicleSpeed * delta * 2.1;
+-    for (const name of ["wheelFL", "wheelFR", "wheelRL", "wheelRR"]) {
+-      const wheel = car.getObjectByName(name);
+-      if (!wheel) continue;
+-      wheel.rotation.x = this.wheelSpin;
+-      if (name === "wheelFL" || name === "wheelFR") wheel.rotation.y = steer * 0.38;
+-      const suspensionWave = Math.sin(this.elapsed * 9 + (name.endsWith("R") ? 1.5 : 0)) * Math.min(0.08, Math.abs(this.vehicleSpeed) * 0.0025);
+-      wheel.position.y = 0.5 + suspensionWave;
+-    }
++    this.wheelSpin += this.vehicleSpeed * delta / 0.5;
++    this.settleVehicleOnTerrain(car, this.vehicleYaw, this.vehicleSpeed, this.vehicleSteerAngle, delta);
+ 
+     this.player.position.copy(car.position);
+     this.grounded = true;
+@@ -10233,6 +10402,8 @@ grapple() {
+     this.canvas.addEventListener("pointermove", this.onPointerMove);
+     this.canvas.addEventListener("pointerup", this.onPointerUp);
+     this.canvas.addEventListener("pointercancel", this.onPointerUp);
++    window.addEventListener("pointerup", this.onGlobalPointerRelease, true);
++    window.addEventListener("pointercancel", this.onGlobalPointerRelease, true);
+     this.canvas.addEventListener("contextmenu", this.preventContextMenu);
+     document.addEventListener("pointerlockchange", this.onPointerLockChange);
+     this.canvas.addEventListener("webglcontextlost", this.onGraphicsContextLost as EventListener, false);
+@@ -10252,6 +10423,8 @@ grapple() {
+     this.canvas.removeEventListener("pointermove", this.onPointerMove);
+     this.canvas.removeEventListener("pointerup", this.onPointerUp);
+     this.canvas.removeEventListener("pointercancel", this.onPointerUp);
++    window.removeEventListener("pointerup", this.onGlobalPointerRelease, true);
++    window.removeEventListener("pointercancel", this.onGlobalPointerRelease, true);
+     this.canvas.removeEventListener("contextmenu", this.preventContextMenu);
+     document.removeEventListener("pointerlockchange", this.onPointerLockChange);
+     this.canvas.removeEventListener("webglcontextlost", this.onGraphicsContextLost as EventListener);
+@@ -10279,6 +10452,10 @@ grapple() {
+       if (action === "realityFuture") this.setReality("future");
+       if (action === "weave") this.setWeaving(this.settings.toggleActions ? !this.weaving : true);
+       if (action === "vehicle") this.toggleVehicle();
++      if (action === "fire") {
++        this.requestAimPointerLock();
++        this.fire();
++      }
+     }
+     if (this.gameplayEnabled) this.reportInput("TECLADO");
+   };
+@@ -10292,33 +10469,32 @@ grapple() {
+   private onPointerDown = (event: PointerEvent) => {
+     if (!this.gameplayEnabled || event.pointerType === "touch") return;
+     this.canvas.focus({ preventScroll: true });
+-    // CS-style aiming: lock the pointer so the mouse steers the camera freely
+-    // (crosshair stays centred). Press Esc to release the mouse.
+-    if (!this.pointerLocked && this.canvas.requestPointerLock) {
+-      try {
+-        void Promise.resolve(this.canvas.requestPointerLock()).catch(() => undefined);
+-      } catch {
+-        // Pointer lock unavailable — the drag fallback below still works.
+-      }
+-    }
++    // Pointer Lock keeps relative mouse look active, but is independent from
++    // the arm/fire pose. Releasing the button ends the pose without requiring Esc.
++    this.requestAimPointerLock();
+     this.pointerId = event.pointerId;
+     this.pointerX = event.clientX;
+     this.pointerY = event.clientY;
+     // Left mouse button = primary fire (hold to keep shooting).
+     if (event.button === 0) {
+-      this.firing = true;
++      this.mouseFiring = true;
++      this.syncFiringState();
+       this.fire();
+     }
+     this.reportInput("MOUSE");
+   };
+ 
+   setFiring(active: boolean) {
+-    this.firing = active;
++    this.touchFiring = active;
++    this.syncFiringState();
+   }
+ 
+   private onPointerLockChange = () => {
+     this.pointerLocked = document.pointerLockElement === this.canvas;
+-    if (!this.pointerLocked) this.firing = false;
++    if (!this.pointerLocked) {
++      this.mouseFiring = false;
++      this.syncFiringState();
++    }
+   };
+ 
+   private onPointerMove = (event: PointerEvent) => {
+@@ -10326,6 +10502,12 @@ grapple() {
+     const sensitivity = 0.0032 * this.settings.cameraSensitivity;
+     const invert = this.settings.invertY ? 1 : -1;
+     if (this.pointerLocked) {
++      // A release may be delivered outside the canvas after Pointer Lock.
++      // event.buttons is an additional fail-safe so the arm can never remain stuck.
++      if ((event.buttons & 1) === 0 && this.mouseFiring) {
++        this.mouseFiring = false;
++        this.syncFiringState();
++      }
+       // Free-look: raw mouse movement steers the camera (no dragging needed).
+       this.yaw -= event.movementX * sensitivity;
+       this.pitch += event.movementY * sensitivity * invert;
+@@ -10343,7 +10525,17 @@ grapple() {
+ 
+   private onPointerUp = (event: PointerEvent) => {
+     if (event.pointerId === this.pointerId) this.pointerId = null;
+-    if (event.button === 0) this.firing = false;
++    if (event.button === 0) {
++      this.mouseFiring = false;
++      this.syncFiringState();
++    }
++  };
++
++  private onGlobalPointerRelease = (event: PointerEvent) => {
++    if (event.button !== 0) return;
++    this.mouseFiring = false;
++    this.syncFiringState();
++    if (event.pointerId === this.pointerId) this.pointerId = null;
+   };
+ 
+   private preventContextMenu = (event: Event) => event.preventDefault();
+@@ -10402,7 +10594,10 @@ grapple() {
+ 
+   private clearInput = () => {
+     this.keys.clear();
+-    this.firing = false;
++    this.mouseFiring = false;
++    this.touchFiring = false;
++    this.gamepadFiring = false;
++    this.syncFiringState();
+     this.gamepadButtons = [];
+     this.pointerId = null;
+     this.touchMove.set(0, 0);
+@@ -10966,27 +11161,29 @@ grapple() {
+         predicted.y = footGround.height + target.ankleY;
+         const plant = this.footPlants[label];
+         const shouldPlant = allowFootPlant && target.stance;
+-        if (shouldPlant && !plant.planted) {
+-          plant.position.copy(predicted);
+-          plant.planted = true;
+-        }
+-        plant.weight = THREE.MathUtils.damp(plant.weight, shouldPlant ? 1 : 0, shouldPlant ? 18 : 14, delta);
+-        if (!shouldPlant && plant.weight < 0.08) {
+-          plant.planted = false;
+-          plant.position.copy(predicted);
+-        }
++        if (!plant.planted) plant.position.copy(predicted);
++        // Soft contact stabilization: the previous implementation froze each
++        // foot in world space for half a stride. The root then travelled beyond
++        // the leg reach, producing fully extended/floating legs and a visible pop.
++        // The contact point now follows with controlled slip and a capped blend.
++        const contactFollow = 1 - Math.exp(-delta * (shouldPlant ? 7 : 18));
++        plant.position.lerp(predicted, contactFollow);
++        plant.planted = shouldPlant;
++        plant.weight = THREE.MathUtils.damp(plant.weight, shouldPlant ? 0.48 : 0, shouldPlant ? 14 : 18, delta);
+         const ankleWorld = predicted.clone().lerp(plant.position, plant.weight);
+         const ankleOffset = ankleWorld.clone().sub(this.player.position);
+         const ankleY = ankleWorld.y - this.player.position.y;
+-        const ankleZ = ankleOffset.dot(forward);
++        const ankleZ = THREE.MathUtils.clamp(ankleOffset.dot(forward), -0.36, 0.36);
+         const pose = solveTwoBoneLeg(ankleY - hip.position.y, ankleZ);
+-        hip.rotation.x = pose.hip;
+-        hip.rotation.z = side * 0.018 * motionAmount;
+-        knee.rotation.x = pose.knee;
++        hip.rotation.x = dampAngle(hip.rotation.x, pose.hip, 20, delta);
++        hip.rotation.z = THREE.MathUtils.damp(hip.rotation.z, side * 0.014 * motionAmount, 18, delta);
++        knee.rotation.x = dampAngle(knee.rotation.x, pose.knee, 22, delta);
