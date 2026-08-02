@@ -38,7 +38,14 @@ jobs:
             payload/chunk-08-05 \
             payload/chunk-08-06 \
             payload/chunk-08-07 \
-            payload/chunk-08-08x \
+            payload/chunk-08-08 \
+            payload/chunk-08-09 \
+            payload/chunk-08-10 \
+            payload/chunk-08-11 \
+            payload/chunk-08-12 \
+            payload/chunk-08-13 \
+            payload/chunk-08-14 \
+            payload/chunk-08-15 \
             > chunk08.actual
 
           cat \
