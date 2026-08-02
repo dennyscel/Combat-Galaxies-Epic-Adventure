@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - echoloom-passada1-ci-20260801
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -34,17 +37,6 @@ jobs:
             > chunk08.actual
 
           patch --batch --forward chunk08.actual < payload/chunk08-repair.patch
-          cmp -s chunk08.actual <(cat \
-            payload/chunk-08-00 \
-            payload/chunk-08-01 \
-            payload/chunk-08-02 \
-            payload/chunk-08-03 \
-            payload/chunk-08-04 \
-            payload/chunk-08-05 \
-            payload/chunk-08-06 \
-            payload/chunk-08-07 \
-            payload/chunk-08-08x \
-          ) || true
 
           cat \
             payload/chunk-00 \
