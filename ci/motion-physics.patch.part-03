@@ -1,0 +1,154 @@
+         const plantedGround = this.sampleGround(ankleWorld.x, ankleWorld.z);
+         const localFootNormal = plantedGround.normal.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), -this.player.rotation.y);
+-        foot.rotation.x = pose.ankle + target.toeRoll + Math.atan2(-localFootNormal.z, localFootNormal.y) * 0.72;
+-        foot.rotation.z = Math.atan2(localFootNormal.x, localFootNormal.y) * 0.72;
++        const footPitch = THREE.MathUtils.clamp(Math.atan2(-localFootNormal.z, localFootNormal.y), -0.36, 0.36);
++        const footRoll = THREE.MathUtils.clamp(Math.atan2(localFootNormal.x, localFootNormal.y), -0.32, 0.32);
++        foot.rotation.x = dampAngle(foot.rotation.x, pose.ankle + target.toeRoll + footPitch * 0.62, 24, delta);
++        foot.rotation.z = THREE.MathUtils.damp(foot.rotation.z, footRoll * 0.62, 22, delta);
+ 
+         if (!this.grounded && !this.traversal) {
+           hip.rotation.x = side < 0 ? -0.38 : 0.18;
+@@ -11048,7 +11245,8 @@ grapple() {
+     }
+ 
+     if (contactShadow instanceof THREE.Mesh) {
+-      const airborneHeight = Math.max(0, this.player.position.y - PLAYER_GROUND_Y);
++      const localGroundHeight = this.terrainHeight(this.player.position.x, this.player.position.z) + 0.011;
++      const airborneHeight = Math.max(0, this.player.position.y - localGroundHeight);
+       const shadowStrength = THREE.MathUtils.clamp(1 - airborneHeight / 4.5, 0.18, 1);
+       contactShadow.scale.setScalar(1 + airborneHeight * 0.12);
+       const material = contactShadow.material;
+@@ -11378,7 +11576,8 @@ grapple() {
+     if (pressed(15) && !previous[15]) this.setReality("future");
+     this.setWeaving(pressed(5));
+     // Right trigger / right bumper = fire (held for sustained fire).
+-    this.firing = pressed(7) || pressed(4);
++    this.gamepadFiring = pressed(7) || pressed(4);
++    this.syncFiringState();
+     this.gamepadButtons = current;
+   }
+ 
+diff --git a/app/characterMotorMath.mjs b/app/characterMotorMath.mjs
+index d1f1d5b..145beb3 100644
+--- a/app/characterMotorMath.mjs
++++ b/app/characterMotorMath.mjs
+@@ -149,10 +149,10 @@ export function classifyLocomotionState({
+ 
+ export function animationProfile(state) {
+   switch (state) {
+-    case "walk": return { stride: 1.34, reach: 0.72, lift: 0.58, bob: 0.62, arm: 0.52 };
+-    case "run": return { stride: 1.12, reach: 1, lift: 1, bob: 1, arm: 1 };
+-    case "sprint": return { stride: 1.48, reach: 1.22, lift: 1.16, bob: 1.08, arm: 1.22 };
+-    case "combat": return { stride: 0.94, reach: 0.68, lift: 0.58, bob: 0.48, arm: 0.18 };
++    case "walk": return { stride: 1.18, reach: 0.72, lift: 0.52, bob: 0.46, arm: 0.56 };
++    case "run": return { stride: 1.06, reach: 0.96, lift: 0.86, bob: 0.78, arm: 0.92 };
++    case "sprint": return { stride: 1.2, reach: 1.12, lift: 1, bob: 0.9, arm: 1.12 };
++    case "combat": return { stride: 1.02, reach: 0.62, lift: 0.48, bob: 0.36, arm: 0.14 };
+     case "landing": return { stride: 1.12, reach: 0.24, lift: 0.08, bob: 0.22, arm: 0.3 };
+     default: return { stride: 1.12, reach: 0, lift: 0, bob: 0, arm: 0 };
+   }
+diff --git a/app/locomotionMath.mjs b/app/locomotionMath.mjs
+index ae52e73..9f81e91 100644
+--- a/app/locomotionMath.mjs
++++ b/app/locomotionMath.mjs
+@@ -1,14 +1,14 @@
+ const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+ 
+ export const PLAYER_GROUND_Y = -0.025;
+-export const HIP_HEIGHT = 0.45;
+-export const STRIDE_LENGTH = 0.28 * 4;
++export const HIP_HEIGHT = 0.91;
++export const STRIDE_LENGTH = 0.31 * 4;
+ 
+ const FOOT_GROUND_Y = 0.12;
+ const THIGH_LENGTH = 0.45;
+ const SHIN_LENGTH = 0.43;
+-const STEP_REACH = 0.28;
+-const FOOT_LIFT = 0.17;
++const STEP_REACH = 0.245;
++const FOOT_LIFT = 0.135;
+ 
+ export function advanceLocomotionPhase(phase, distanceTravelled, strideLength = STRIDE_LENGTH) {
+   if (!Number.isFinite(distanceTravelled) || distanceTravelled <= 0) return phase;
+diff --git a/package-lock.json b/package-lock.json
+index ca12a8f..5f329ad 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1,12 +1,12 @@
+ {
+   "name": "echoloom-cidade-da-ruptura-unificado",
+-  "version": "0.22.1-marco18.aim1",
++  "version": "0.22.2-marco18.motion1",
+   "lockfileVersion": 3,
+   "requires": true,
+   "packages": {
+     "": {
+       "name": "echoloom-cidade-da-ruptura-unificado",
+-      "version": "0.22.1-marco18.aim1",
++      "version": "0.22.2-marco18.motion1",
+       "dependencies": {
+         "react": "19.2.6",
+         "react-dom": "19.2.6",
+diff --git a/package.json b/package.json
+index 8488e39..6f4dbf4 100644
+--- a/package.json
++++ b/package.json
+@@ -1,7 +1,7 @@
+ {
+   "name": "echoloom-cidade-da-ruptura-unificado",
+   "private": true,
+-  "version": "0.22.1-marco18.aim1",
++  "version": "0.22.2-marco18.motion1",
+   "type": "module",
+   "engines": {
+     "node": ">=22.13.0",
+diff --git a/public/LEIA-ME-HOSTINGER.txt b/public/LEIA-ME-HOSTINGER.txt
+index 2b3a853..9b495c2 100644
+--- a/public/LEIA-ME-HOSTINGER.txt
++++ b/public/LEIA-ME-HOSTINGER.txt
+@@ -3,7 +3,7 @@ ECHOLOOM: CIDADE DA RUPTURA — MARCO 18 — RELEASE CANDIDATE 1
+ 
+ Motor oficial: Three.js/WebGPU com fallback WebGL2.
+ Fonte principal: app/GameExperience.tsx.
+-Versão: 0.22.1-marco18.aim1.
++Versão: 0.22.2-marco18.motion1.
+ 
+ BUILD
+ -----
+diff --git a/scripts/browser-smoke.mjs b/scripts/browser-smoke.mjs
+index 89937e2..0a0345f 100644
+--- a/scripts/browser-smoke.mjs
++++ b/scripts/browser-smoke.mjs
+@@ -106,6 +106,31 @@ async function exerciseRuntime(browser, origin, mode) {
+     const yawDelta = Math.atan2(Math.sin(aimAfter.yaw - aimAfter.playerYaw), Math.cos(aimAfter.yaw - aimAfter.playerYaw));
+     assert.ok(Math.abs(yawDelta) < 0.22, `${mode}: corpo não acompanhou o yaw da câmera (${yawDelta})`);
+ 
++    const pointerOnly = await page.evaluate(() => window.__ECHOLOOM_QA__.controlPose("pointer", true, 30));
++    assert.equal(pointerOnly.controls.pointerLocked, true, `${mode}: probe de Pointer Lock não foi ativado`);
++    assert.ok(pointerOnly.controls.aimPoseBlend < 0.08, `${mode}: Pointer Lock sozinho travou os braços (${pointerOnly.controls.aimPoseBlend})`);
++    const mouseHeld = await page.evaluate(() => window.__ECHOLOOM_QA__.controlPose("mouse", true, 36));
++    assert.equal(mouseHeld.controls.firing, true, `${mode}: mouse não ativou disparo sustentado`);
++    assert.ok(mouseHeld.controls.aimPoseBlend > 0.82, `${mode}: braço não entrou na pose enquanto o clique estava pressionado (${mouseHeld.controls.aimPoseBlend})`);
++    const mouseReleased = await page.evaluate(() => window.__ECHOLOOM_QA__.controlPose("mouse", false, 72));
++    assert.equal(mouseReleased.controls.firing, false, `${mode}: soltar o mouse não encerrou o disparo`);
++    assert.equal(mouseReleased.controls.pointerLocked, true, `${mode}: soltar o tiro liberou indevidamente a câmera`);
++    assert.ok(mouseReleased.controls.aimPoseBlend < 0.08, `${mode}: braço permaneceu travado após soltar o mouse (${mouseReleased.controls.aimPoseBlend})`);
++    const keyboardHeld = await page.evaluate(() => window.__ECHOLOOM_QA__.controlPose("keyboard", true, 36));
++    assert.equal(keyboardHeld.controls.keyboardFiring, true, `${mode}: tecla J não ativou o mesmo estado de tiro`);
++    assert.ok(keyboardHeld.controls.aimPoseBlend > 0.82, `${mode}: tecla J não ativou a pose de disparo`);
++    const keyboardReleased = await page.evaluate(() => window.__ECHOLOOM_QA__.controlPose("keyboard", false, 72));
++    assert.equal(keyboardReleased.controls.keyboardFiring, false, `${mode}: keyup de J não liberou o braço`);
++    assert.ok(keyboardReleased.controls.aimPoseBlend < 0.08, `${mode}: braço permaneceu travado após soltar J`);
++
++    const walkProbe = await page.evaluate(() => window.__ECHOLOOM_QA__.locomotionProbe(3.7, 120));
++    assert.equal(walkProbe.locomotion.grounded, true, `${mode}: probe de caminhada perdeu o chão`);
++    assert.ok(walkProbe.locomotion.hipHeight >= 0.82, `${mode}: quadril ainda está comprimindo a cadeia das pernas`);
++    for (const [label, sole] of [["esquerdo", walkProbe.locomotion.leftSole], ["direito", walkProbe.locomotion.rightSole]]) {
++      assert.ok(sole && Number.isFinite(sole.clearance), `${mode}: sola ${label} sem leitura de contato`);
++      assert.ok(Math.abs(sole.clearance) < 0.34, `${mode}: pé ${label} flutuando ou enterrado (${sole.clearance})`);
++    }
++
+     const cooldown = await page.evaluate(() => {
+       window.__ECHOLOOM_QA__.prepareCombatFixture(10, 110);
+       return window.__ECHOLOOM_QA__.tenSynchronousAttempts();
