@@ -1,0 +1,27 @@
+--- a/app/GameExperience.tsx
++++ b/app/GameExperience.tsx
+@@ -8145,7 +8145,7 @@
+     if (object === this.cloudLayer || object === this.sunDisc || object === this.rain) return true;
+     if (object instanceof THREE.Points || object instanceof THREE.Line || object instanceof THREE.LineSegments || object instanceof THREE.Sprite) return true;
+     const kind = String(object.userData.kind ?? "");
+-    if (["bolt", "stars", "pathMarker", "shard"].includes(kind)) return true;
++    if (["bolt", "enemyBolt", "hitBurst", "stars", "pathMarker", "shard"].includes(kind)) return true;
+     if (object instanceof THREE.Mesh) {
+       const materials = Array.isArray(object.material) ? object.material : [object.material];
+       if (materials.some((material) => material.side === THREE.BackSide)) return true;
+@@ -8402,6 +8402,7 @@
+     });
+     for (let i = 0; i < 10; i += 1) {
+       const mesh = new THREE.Mesh(burstGeometry, burstMaterial);
++      mesh.userData.kind = "hitBurst";
+       mesh.visible = false;
+       mesh.frustumCulled = false;
+       this.world.add(mesh);
+@@ -8414,6 +8415,7 @@
+     const material = new THREE.MeshBasicMaterial({ color: 0xff4b35 });
+     for (let i = 0; i < count; i += 1) {
+       const mesh = new THREE.Mesh(geometry, material);
++      mesh.userData.kind = "enemyBolt";
+       mesh.visible = false;
+       mesh.frustumCulled = false;
+       this.world.add(mesh);
