@@ -1,0 +1,11 @@
+--- a/app/GameExperience.tsx
++++ b/app/GameExperience.tsx
+@@ -11105,7 +11105,7 @@
+     const strideCameraBob = Math.sin(phase * 2) * 0.018 * motionAmount * poseProfile.bob * motionScale;
+     // Persistent over-the-shoulder framing keeps KAI-R away from the centre
+     // crosshair even before the first shot. Aim mode tightens the shoulder.
+-    const shoulderOffset = THREE.MathUtils.lerp(portrait ? 0.42 : 0.72, portrait ? 0.62 : 1.02, this.aimPoseBlend);
++    const shoulderOffset = THREE.MathUtils.lerp(portrait ? 0.58 : 1.05, portrait ? 0.88 : 1.58, this.aimPoseBlend);
+     const cameraPivot = this.player.position.clone()
+       .addScaledVector(cameraForward, 0.22)
+       .add(new THREE.Vector3(0, 1.5 + strideCameraBob + this.cameraLandingOffset, 0));
