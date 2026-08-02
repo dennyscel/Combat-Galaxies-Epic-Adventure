@@ -39,4 +39,3 @@
 +    assert.ok(screenSeparation > 0.1, `${mode}: separação visual entre KAI-R e a mira é insuficiente (${screenSeparation})`);
      const yawDelta = Math.atan2(Math.sin(aimAfter.yaw - aimAfter.playerYaw), Math.cos(aimAfter.yaw - aimAfter.playerYaw));
      assert.ok(Math.abs(yawDelta) < 0.22, `${mode}: corpo não acompanhou o yaw da câmera (${yawDelta})`);
- 
