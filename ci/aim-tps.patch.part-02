@@ -1,0 +1,92 @@
+htProbe: (charge = 35) => { this.stage = STAGES[5]; this.nightPhase = "scavenge"; this.nightCharge = charge; this.energy = 1; this.lastFireTime = -999; this.resetQaCounters(); return this.runtimeSnapshot(); },
+@@ -10451,7 +10535,7 @@
+       const move = new THREE.Vector3(worldInput.x, 0, worldInput.z);
+       const analogMagnitude = THREE.MathUtils.clamp(input.length(), 0, 1);
+       const sprinting = this.keys.has("sprint") && this.stamina > 0.025 && analogMagnitude > 0.1;
+-      const aiming = this.firing || this.keys.has("fire") || this.weaving;
++      const aiming = this.isCameraAiming();
+       const preGround = this.sampleGround(this.player.position.x, this.player.position.z);
+       this.groundNormal.lerp(preGround.normal, 1 - Math.exp(-delta * 16)).normalize();
+       this.groundSlope = Math.acos(THREE.MathUtils.clamp(this.groundNormal.y, -1, 1));
+@@ -10562,7 +10646,7 @@
+       this.consumeBufferedJump();
+ 
+       const horizontalSpeed = Math.hypot(this.velocity.x, this.velocity.z);
+-      if (analogMagnitude > 0.03 && this.dodgeTimer <= 0) {
++      if ((analogMagnitude > 0.03 || aiming) && this.dodgeTimer <= 0) {
+         const desiredFacing = aiming
+           ? this.yaw
+           : characterFacingYaw(this.velocity.x, this.velocity.z);
+@@ -10796,7 +10880,7 @@
+       this.lastFootstepMarker = -1;
+     }
+ 
+-    const aiming = this.firing || this.keys.has("fire") || this.weaving;
++    const aiming = this.isCameraAiming();
+     this.aimPoseBlend = THREE.MathUtils.damp(this.aimPoseBlend, aiming ? 1 : 0, aiming ? 14 : 9, delta);
+     const motionAmount = this.settings.reducedMotion ? 0 : this.locomotionBlend;
+     const phase = this.locomotionPhase;
+@@ -10826,7 +10910,7 @@
+     }
+     if (helmetRig) {
+       helmetRig.position.y = 1.98 - pelvisLift * 0.38;
+-      helmetRig.rotation.x = Math.sin(phase * 2) * 0.012 * motionAmount - slopePitch * 0.32;
++      helmetRig.rotation.x = Math.sin(phase * 2) * 0.012 * motionAmount - slopePitch * 0.32 + this.pitch * 0.42 * this.aimPoseBlend;
+       helmetRig.rotation.y = THREE.MathUtils.damp(helmetRig.rotation.y, this.aimPoseBlend * 0.08, 10, delta);
+       helmetRig.rotation.z = Math.sin(phase) * 0.014 * motionAmount - this.characterLean * 0.35;
+     }
+@@ -11007,23 +11091,27 @@
+     if (motes) motes.rotation.y -= delta * 0.52;
+ 
+     const portrait = this.camera.aspect < 0.82;
+-    const cameraDistance = this.settings.reducedMotion ? 10.2 : portrait ? 9.8 : this.aimPoseBlend > 0.45 ? 8.25 : 8.8;
++    const cameraDistance = this.settings.reducedMotion ? 9.6 : portrait ? 9.2 : this.aimPoseBlend > 0.45 ? 7.8 : 8.65;
+     const cameraForward = new THREE.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
+     const cameraRight = new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
++    const viewDirection = new THREE.Vector3(
++      -Math.sin(this.yaw) * Math.cos(this.pitch),
++      Math.sin(this.pitch),
++      -Math.cos(this.yaw) * Math.cos(this.pitch),
++    ).normalize();
+     const motionScale = cameraMotionScale(this.settings.reducedMotion, this.settings.cameraShake);
+     const strideCameraBob = Math.sin(phase * 2) * 0.018 * motionAmount * poseProfile.bob * motionScale;
+-    const shoulderOffset = this.aimPoseBlend * (portrait ? 0.28 : 0.52);
+-    const cameraTarget = this.player.position.clone()
+-      .addScaledVector(cameraForward, 0.38)
+-      .addScaledVector(cameraRight, shoulderOffset)
+-      .add(new THREE.Vector3(0, 1.48 + strideCameraBob + this.cameraLandingOffset, 0));
+-    const cameraOffset = new THREE.Vector3(
+-      Math.sin(this.yaw) * Math.cos(this.pitch) * cameraDistance,
+-      3.25 + Math.sin(this.pitch) * cameraDistance,
+-      Math.cos(this.yaw) * Math.cos(this.pitch) * cameraDistance,
+-    );
+-    const desiredCamera = cameraTarget.clone().add(cameraOffset);
+-    let desiredTarget = cameraTarget;
++    // Persistent over-the-shoulder framing keeps KAI-R away from the centre
++    // crosshair even before the first shot. Aim mode tightens the shoulder.
++    const shoulderOffset = THREE.MathUtils.lerp(portrait ? 0.42 : 0.72, portrait ? 0.62 : 1.02, this.aimPoseBlend);
++    const cameraPivot = this.player.position.clone()
++      .addScaledVector(cameraForward, 0.22)
++      .add(new THREE.Vector3(0, 1.5 + strideCameraBob + this.cameraLandingOffset, 0));
++    const desiredCamera = cameraPivot.clone()
++      .addScaledVector(viewDirection, -cameraDistance)
++      .addScaledVector(cameraRight, shoulderOffset);
++    let desiredTarget = desiredCamera.clone().addScaledVector(viewDirection, 140);
++    let gameplayViewDirection: THREE.Vector3 | null = viewDirection;
+     let targetFov = this.settings.reducedMotion
+       ? 56
+       : this.aimPoseBlend > 0.5
+@@ -11048,6 +11136,7 @@
+         cut: boolean;
+       };
+       const orbit = this.yaw + shot.yawOffset + Math.sin(cinematic.time * 0.32) * shot.drift;
++      gameplayViewDirection = null;
+       desiredTarget = this.cinematicTarget.clone().add(new THREE.Vector3(0, shot.focusHeight, 0));
+       desiredCamera.set(
+         this.cinematicTarget.x + Math.sin(orbit) * shot.distance + Math.cos(orbit) * shot.side,
+@@ -11061,6 +11150,9 @@
+     const camFloor = this.terrainHeight(desiredCamera.x, desiredCamera.z) + 0.7;
+     desiredCamera.y = Math.max(desiredCamera.y, camFloor, 1.42);
+     this.camera.position.lerp(desiredCamera, 1 - Math.exp(-delta * cameraDamping));
++    if (gameplayViewDirection) {
++      desiredTarget = this.camera.position.clone().addScaledVector(gameplayViewDirec
