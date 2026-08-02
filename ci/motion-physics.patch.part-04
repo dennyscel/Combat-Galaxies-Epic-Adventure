@@ -1,0 +1,143 @@
+@@ -166,6 +191,16 @@ async function exerciseRuntime(browser, origin, mode) {
+     assert.ok(live.fixedUpdateCount > countersBefore.fixedUpdateCount, `${mode}: fixed update não avançou`);
+     assert.equal(live.loopErrors, countersBefore.loopErrors, `${mode}: loop registrou erro após os disparos`);
+ 
++    const vehicleProbe = await page.evaluate(() => window.__ECHOLOOM_QA__.vehicleProbe(150));
++    assert.equal(vehicleProbe.vehicleState.driving, true, `${mode}: probe de veículo não entrou em condução`);
++    assert.equal(vehicleProbe.vehicleState.wheels.length, 4, `${mode}: veículo não manteve quatro rodas vinculadas`);
++    for (const wheel of vehicleProbe.vehicleState.wheels) {
++      assert.ok(Number.isFinite(wheel.clearance), `${mode}: roda ${wheel.name} sem contato finito`);
++      assert.ok(Math.abs(wheel.clearance) < 0.32, `${mode}: roda ${wheel.name} flutuando ou enterrada (${wheel.clearance})`);
++    }
++    assert.ok(vehicleProbe.vehicleState.rotation.every(Number.isFinite), `${mode}: rotação do carro contém valor inválido`);
++    assert.ok(Math.abs(vehicleProbe.vehicleState.rotation[0]) < 0.5 && Math.abs(vehicleProbe.vehicleState.rotation[2]) < 0.5, `${mode}: carro inclinou além do limite físico (${vehicleProbe.vehicleState.rotation})`);
++
+     const failures = diagnosticsFailures(diagnostics);
+     if (failures.length) throw new Error(`${mode}: erros de navegador:\n${failures.join("\n")}`);
+     console.log(`BROWSER E2E · ${mode.toUpperCase()} · 100 tiros aceitos · 3 acertos · 1 derrota · pools/pipelines estáveis`);
+diff --git a/tests/living-world-integration.test.mjs b/tests/living-world-integration.test.mjs
+index 25fc0f2..7326f0f 100644
+--- a/tests/living-world-integration.test.mjs
++++ b/tests/living-world-integration.test.mjs
+@@ -39,6 +39,12 @@ test("traffic vehicles use category-specific physics and can be assumed", () =>
+   assert.equal(drive.includes("vehicleProfile(kind"), true);
+   assert.equal(drive.includes("stats.maxSpeed"), true);
+   assert.equal(drive.includes("stats.acceleration"), true);
++  assert.equal(drive.includes("this.vehicleSteerAngle"), true);
++  assert.equal(drive.includes("this.settleVehicleOnTerrain"), true);
++  const settle = between("  private settleVehicleOnTerrain", "  private updateVehicle");
++  assert.equal(settle.includes("wheelPivot"), true);
++  assert.equal(settle.includes("contact.ground - average"), true);
++  assert.equal(settle.includes("tire.rotation.x"), true);
+ });
+ 
+ test("Axiom traffic can pursue the player without runtime asset creation", () => {
+diff --git a/tests/locomotion.test.mjs b/tests/locomotion.test.mjs
+index 6ebd0d3..6bba4f2 100644
+--- a/tests/locomotion.test.mjs
++++ b/tests/locomotion.test.mjs
+@@ -2,8 +2,12 @@ import test from "node:test";
+ import assert from "node:assert/strict";
+ import { HIP_HEIGHT, PLAYER_GROUND_Y, STRIDE_LENGTH, advanceLocomotionPhase, gaitTarget, solveTwoBoneLeg } from "../app/locomotionMath.mjs";
+ 
+-test("locomotion constants are sane", () => {
+-  assert.ok(HIP_HEIGHT > 0 && STRIDE_LENGTH > HIP_HEIGHT && PLAYER_GROUND_Y <= 0);
++test("locomotion constants are sane and match the rendered leg chain", () => {
++  assert.ok(HIP_HEIGHT >= 0.82 && HIP_HEIGHT <= 1.02);
++  assert.ok(STRIDE_LENGTH > HIP_HEIGHT && PLAYER_GROUND_Y <= 0);
++  const standing = solveTwoBoneLeg(0.12 - HIP_HEIGHT, 0);
++  assert.equal(standing.clamped, false);
++  assert.ok(Math.abs(standing.knee) < 1.35, `standing knee is over-folded: ${standing.knee}`);
+ });
+ 
+ test("stationary locomotion keeps phase", () => {
+diff --git a/tests/release-critical-regressions.test.mjs b/tests/release-critical-regressions.test.mjs
+index b3fc9b3..5df0e97 100644
+--- a/tests/release-critical-regressions.test.mjs
++++ b/tests/release-critical-regressions.test.mjs
+@@ -13,24 +13,50 @@ function between(startToken, endToken) {
+   return source.slice(start, end);
+ }
+ 
+-test("regressão crítica: pointer lock CS, mira central e ESC nativo permanecem ligados", () => {
+-  const pointer = between("private onPointerDown", "setFiring(active");
++test("regressão crítica: pointer lock, mira central e ESC nativo permanecem ligados", () => {
++  const pointer = between("private requestAimPointerLock", "private belongsTo");
+   assert.match(pointer, /requestPointerLock/);
+   assert.match(pointer, /Promise\.resolve\(this\.canvas\.requestPointerLock\(\)\)\.catch/);
++  const pointerDown = between("private onPointerDown", "setFiring(active");
++  assert.match(pointerDown, /this\.requestAimPointerLock\(\)/);
+   assert.match(source, /pointerlockchange/);
+   assert.match(source, /document\.exitPointerLock/);
+   assert.match(source, /className="crosshair"/);
+   assert.match(css, /\.crosshair/);
+ });
+ 
+-test("regressão crítica: perda de foco ou gamepad limpa disparo e entradas mantidas", () => {
++test("regressão crítica: perda de foco limpa todas as fontes de disparo e entradas mantidas", () => {
+   const clearInput = between("private clearInput", "private reportInput");
+   assert.match(clearInput, /this\.keys\.clear\(\)/);
+-  assert.match(clearInput, /this\.firing = false/);
++  assert.match(clearInput, /this\.mouseFiring = false/);
++  assert.match(clearInput, /this\.touchFiring = false/);
++  assert.match(clearInput, /this\.gamepadFiring = false/);
++  assert.match(clearInput, /this\.syncFiringState\(\)/);
+   assert.match(clearInput, /this\.gamepadButtons = \[\]/);
+   assert.match(clearInput, /this\.pointerId = null/);
+ });
+ 
++test("regressão de controle: Pointer Lock não mantém braços ou corpo presos na pose de tiro", () => {
++  const aiming = between("private isCameraAiming", "private syncFiringState");
++  assert.match(aiming, /this\.firing/);
++  assert.match(aiming, /this\.keys\.has\("fire"\)/);
++  assert.doesNotMatch(aiming, /pointerLocked/);
++  assert.doesNotMatch(aiming, /inputLabel/);
++  const release = between("private onPointerUp", "private preventContextMenu");
++  assert.match(release, /this\.mouseFiring = false/);
++  assert.match(release, /this\.syncFiringState\(\)/);
++  assert.match(source, /window\.addEventListener\("pointerup", this\.onGlobalPointerRelease, true\)/);
++});
++
++test("regressão de controle: tecla J usa o mesmo disparo sustentado e libera no keyup", () => {
++  const keyDown = between("private onKeyDown", "private onKeyUp");
++  assert.match(keyDown, /action === "fire"/);
++  assert.match(keyDown, /this\.requestAimPointerLock\(\)/);
++  assert.match(keyDown, /this\.fire\(\)/);
++  const keyUp = between("private onKeyUp", "private onPointerDown");
++  assert.match(keyUp, /this\.keys\.delete\(action\)/);
++});
++
+ test("regressão crítica: rejeição tardia do renderer não fica sem tratamento", () => {
+   assert.match(source, /engine\.initialize\(\)\.catch/);
+   assert.match(source, /setBackend\("GPU INDISPONÍVEL"\)/);
+@@ -111,6 +137,30 @@ test("regressão crítica: IK, plantio de pés, vault e mantle seguem distintos"
+   assert.match(source, /profile\.kind === "mantle"/);
+ });
+ 
++
++test("regressão de locomoção: pés usam contato suave e nunca congelam por meia passada", () => {
++  const visual = between("  private visualUpdate(delta: number)", "  private updateNodes(delta: number)");
++  assert.match(visual, /Soft contact stabilization/);
++  assert.match(visual, /plant\.position\.lerp\(predicted, contactFollow\)/);
++  assert.match(visual, /shouldPlant \? 0\.48 : 0/);
++  assert.match(visual, /THREE\.MathUtils\.clamp\(ankleOffset\.dot\(forward\), -0\.36, 0\.36\)/);
++  assert.doesNotMatch(visual, /shouldPlant \? 1 : 0/);
++});
++
++test("regressão de veículo: rodas usam pivôs, contato individual e suspensão derivada do terreno", () => {
++  const settle = between("  private settleVehicleOnTerrain", "  private updateVehicle");
++  assert.match(settle, /wheelPivot/);
++  assert.match(settle, /terrainHeight\(worldX, worldZ\)/);
++  assert.match(settle, /targetPitch/);
++  assert.match(settle, /targetRoll/);
++  assert.match(settle, /contact\.ground - average/);
++  assert.match(settle, /tire\.rotation\.x/);
++  const drive = between("  private updateVehicle", "  \/\/ North-up radar");
++  assert.match(drive, /vehicleSteerAngle/);
++  assert.match(drive, /settleVehicleOnTerrain/);
++  assert.doesNotMatch(drive, /suspensionWave/);
++});
++
+ test("regressão crítica: campanha oficial, três finais, créditos e pós-jogo permanecem", () => {
+   for (const stage of ["prologue", "aurora", "horizon", "port", "vespera", "night", "malha"]) {
+     assert.match(data, new RegExp(`id: "${stage}"`));
