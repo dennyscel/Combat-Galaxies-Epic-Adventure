@@ -1,0 +1,7 @@
+ECHOLOOM Passada 1 isolated CI payload
+branch=echoloom-passada1-ci-20260801
+combined_files=11
+original_base64_chunks=22
+xz_sha256=f213c567d76958479d8eb2695d45f4f2b101baaed550d244e974ec616b1704bc
+zip_sha256=ad59c8bfd86be6ec6460eff0348f33961b1831a8fba3b119d9f592376f161731
+policy=DO_NOT_MERGE
