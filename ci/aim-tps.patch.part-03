@@ -1,0 +1,97 @@
+tion, 140);
++    }
+     this.camera.lookAt(desiredTarget);
+     const nextFov = THREE.MathUtils.damp(this.camera.fov, targetFov, 7.5, delta);
+     if (Math.abs(nextFov - this.camera.fov) > 0.005) {
+--- a/package-lock.json	2000-01-01 00:00:00.000000000 +0000
++++ b/package-lock.json	2026-08-02 02:41:54.851362508 +0000
+@@ -1,12 +1,12 @@
+ {
+   "name": "echoloom-cidade-da-ruptura-unificado",
+-  "version": "0.22.0-marco18",
++  "version": "0.22.1-marco18.aim1",
+   "lockfileVersion": 3,
+   "requires": true,
+   "packages": {
+     "": {
+       "name": "echoloom-cidade-da-ruptura-unificado",
+-      "version": "0.22.0-marco18",
++      "version": "0.22.1-marco18.aim1",
+       "dependencies": {
+         "react": "19.2.6",
+         "react-dom": "19.2.6",
+--- a/package.json	2000-01-01 00:00:00.000000000 +0000
++++ b/package.json	2026-08-02 02:41:54.851362508 +0000
+@@ -1,7 +1,7 @@
+ {
+   "name": "echoloom-cidade-da-ruptura-unificado",
+   "private": true,
+-  "version": "0.22.0-marco18",
++  "version": "0.22.1-marco18.aim1",
+   "type": "module",
+   "engines": {
+     "node": ">=22.13.0",
+--- a/public/LEIA-ME-HOSTINGER.txt	2000-01-01 00:00:00.000000000 +0000
++++ b/public/LEIA-ME-HOSTINGER.txt	2026-08-02 02:41:54.851362508 +0000
+@@ -3,7 +3,7 @@
+ 
+ Motor oficial: Three.js/WebGPU com fallback WebGL2.
+ Fonte principal: app/GameExperience.tsx.
+-Versão: 0.22.0-marco18.
++Versão: 0.22.1-marco18.aim1.
+ 
+ BUILD
+ -----
+--- a/scripts/browser-smoke.mjs	2000-01-01 00:00:00.000000000 +0000
++++ b/scripts/browser-smoke.mjs	2026-08-02 02:41:55.859362541 +0000
+@@ -93,6 +93,19 @@
+     assert.equal(initial.pools.impacts.size, 10, `${mode}: pool de impactos`);
+     assert.equal(initial.pools.enemy.size, 36, `${mode}: pool inimigo`);
+ 
++    const aimBefore = initial.aim;
++    await page.evaluate(() => window.__ECHOLOOM_QA__.rotateAim(120, -45));
++    await delay(450);
++    const aimAfter = await page.evaluate(() => window.__ECHOLOOM_QA__.snapshot().aim);
++    assert.notDeepEqual(aimAfter.cameraDirection, aimBefore.cameraDirection, `${mode}: mouse/toque não alterou a direção da câmera`);
++    const toPlayer = aimAfter.playerPosition.map((value, index) => value + (index === 1 ? 1.45 : 0) - aimAfter.cameraPosition[index]);
++    const toPlayerLength = Math.hypot(...toPlayer);
++    const cameraLength = Math.hypot(...aimAfter.cameraDirection);
++    const bodyDot = toPlayer.reduce((sum, value, index) => sum + value * aimAfter.cameraDirection[index], 0) / Math.max(1e-6, toPlayerLength * cameraLength);
++    assert.ok(bodyDot < 0.97, `${mode}: centro da mira continua preso ao corpo (${bodyDot})`);
++    const yawDelta = Math.atan2(Math.sin(aimAfter.yaw - aimAfter.playerYaw), Math.cos(aimAfter.yaw - aimAfter.playerYaw));
++    assert.ok(Math.abs(yawDelta) < 0.22, `${mode}: corpo não acompanhou o yaw da câmera (${yawDelta})`);
++
+     const cooldown = await page.evaluate(() => {
+       window.__ECHOLOOM_QA__.prepareCombatFixture(10, 110);
+       return window.__ECHOLOOM_QA__.tenSynchronousAttempts();
+--- a/tests/release-critical-regressions.test.mjs	2000-01-01 00:00:00.000000000 +0000
++++ b/tests/release-critical-regressions.test.mjs	2026-08-02 02:41:55.351362524 +0000
+@@ -134,3 +134,28 @@
+   assert.match(source, /dynamicResolutionStep\(/);
+   assert.match(source, /this\.renderer\.setPixelRatio/);
+ });
++
++
++test("regressão TPS: câmera mira para a frente e mantém KAI-R fora do centro", () => {
++  const visual = between("  private visualUpdate(delta: number)", "  private updateNodes(delta: number)");
++  assert.match(visual, /const viewDirection = new THREE\.Vector3/);
++  assert.match(visual, /desiredCamera\.clone\(\)\.addScaledVector\(viewDirection, 140\)/);
++  assert.match(visual, /this\.camera\.position\.clone\(\)\.addScaledVector\(gameplayViewDirection, 140\)/);
++  assert.match(visual, /shoulderOffset = THREE\.MathUtils\.lerp/);
++  assert.doesNotMatch(visual, /this\.camera\.lookAt\(cameraTarget\)/);
++});
++
++test("regressão TPS: corpo acompanha yaw da câmera mesmo parado em modo de mira", () => {
++  const fixed = between("  private fixedUpdate(delta: number)", "  private visualUpdate(delta: number)");
++  assert.match(fixed, /const aiming = this\.isCameraAiming\(\)/);
++  assert.match(fixed, /analogMagnitude > 0\.03 \|\| aiming/);
++  assert.match(fixed, /aiming\s*\? this\.yaw/);
++});
++
++test("regressão TPS: tiro usa raio da câmera e obstrução a partir do cano", () => {
++  const fire = between("  fire()", "  // Pre-build a shared-material");
++  assert.match(fire, /this\.raycastAimPoint\(camPos, rayDir, 140\)/);
++  assert.match(fire, /this\.raycastAimPoint\(muzzle, boltDir, targetDistance\)/);
++  assert.match(fire, /bolt\.travelLeft = Math\.min\(128/);
++  assert.match(fire, /addScaledVector\(playerRight, 0\.34\)/);
++});
