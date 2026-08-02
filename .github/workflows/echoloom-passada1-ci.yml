@@ -35,7 +35,10 @@ jobs:
             payload/chunk-03
             payload/chunk-04
             payload/chunk-05
-            payload/chunk-06
+            payload/chunk-06a
+            payload/chunk-06b
+            payload/chunk-06c
+            payload/chunk-06d
             payload/chunk-08
             payload/chunk-10
             payload/chunk-12
@@ -58,7 +61,10 @@ jobs:
             74db2f0497d94722770c83ac95575cb2488dabda
             a12c45a52cc2b39c751888a6d14cfb869088da91
             2581cbe39e68769551bbb26fa3807696b18305a7
-            9256d452001e233cc4b74c0bdc6fc71cc47c36f4
+            5fe6258b894ad382e1fa60d70d931a9cfa288419
+            68dd57d011c0fbbf85a9cbfbfb5d5509f5ac5302
+            c6f58ceaea49b72600e9a76cab02b834ec00b9b9
+            12a3450421060c7d17b632ef92e508540cb83d65
             c9c0b0d3ce1db1df53a0cd91b5937f68d3ebd508
             49ff07bee46c72eeed4cefceb52f188df5d956f9
             4b7fd5cfe89b26f99062da77fcfeaffee611a126
