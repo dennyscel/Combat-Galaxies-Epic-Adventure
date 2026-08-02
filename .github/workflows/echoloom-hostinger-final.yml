@@ -89,8 +89,10 @@ jobs:
           assert config.count(old) == 1, config.count(old)
           config_path.write_text(config.replace(old, new, 1))
           PY
+          patch --batch --forward -p1 < ../ci/browser-cleanup.patch
+          node --check scripts/browser-test-runtime.mjs
           grep -n -A6 -B2 'target.phase = 0' app/GameExperience.tsx
-          sha256sum app/GameExperience.tsx vite.static.config.mts
+          sha256sum app/GameExperience.tsx vite.static.config.mts scripts/browser-test-runtime.mjs
 
       - name: Setup Node 22.13.1
         uses: actions/setup-node@v4
@@ -108,7 +110,7 @@ jobs:
             node --version
             npm --version
             google-chrome --version || true
-            sha256sum project/app/GameExperience.tsx project/vite.static.config.mts
+            sha256sum project/app/GameExperience.tsx project/vite.static.config.mts project/scripts/browser-test-runtime.mjs
           } | tee ENVIRONMENT-HOSTINGER-FINAL.log
 
       - name: Clean npm ci
