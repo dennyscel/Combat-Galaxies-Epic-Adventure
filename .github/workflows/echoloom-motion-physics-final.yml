@@ -1,0 +1,135 @@
+name: ECHOLOOM Motion and Physics Final Package
+
+on:
+  push:
+    branches:
+      - echoloom-motion-physics-ci-20260802
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  verify-and-package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      CI: "true"
+      ECHOLOOM_CHROMIUM_PATH: /usr/bin/google-chrome
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout isolated CI branch
+        uses: actions/checkout@v4
+
+      - name: Recover approved TPS source
+        shell: bash
+        run: |
+          set -euxo pipefail
+          gh run download 30729870181 \
+            --repo "$GITHUB_REPOSITORY" \
+            --name echoloom-aim-tps-hostinger-final-v2 \
+            --dir prior-approved
+          SOURCE_ZIP="prior-approved/ECHOLOOM-CIDADE-DA-RUPTURA-CODIGO-FONTE-MIRA-TPS-FINAL.zip"
+          test -f "$SOURCE_ZIP"
+          echo "1209b634270f996255f3adf153f69dc1cdb7c41d567c70c95056f5f1aa77400f  $SOURCE_ZIP" | sha256sum --check --strict
+          mkdir project
+          unzip -q "$SOURCE_ZIP" -d project
+          test -f project/app/GameExperience.tsx
+          test -f project/package-lock.json
+
+      - name: Reconstruct and apply movement physics patch
+        shell: bash
+        run: |
+          set -euxo pipefail
+          echo "ec8f6490e9e0aad31dabb04d1c4b2ee454f454e907278cadf6284cab37004e44  ci/motion-physics.patch.part-00" | sha256sum --check --strict
+          echo "55bb2c24a507e795d6d8499cf91873d2fadca8cbde7a1159a1876b093aa6d5cb  ci/motion-physics.patch.part-01" | sha256sum --check --strict
+          echo "6cbe27e2d3c11014e9d2c63e938936b5c924e0a8e2069bd154c14ddff10db1fc  ci/motion-physics.patch.part-02" | sha256sum --check --strict
+          echo "a540e10961cc54121e2ef02b72c77ba418ecd208745b5354cc5defce8908f912  ci/motion-physics.patch.part-03" | sha256sum --check --strict
+          echo "61e385b9254e32756dcc14a9edfa96d7a249a1b195fdc6b408155fce66052bf6  ci/motion-physics.patch.part-04" | sha256sum --check --strict
+          cat ci/motion-physics.patch.part-* > /tmp/motion-physics.patch
+          echo "5df7e83ab20f2a49aa336c364b9b7606560fb4fa6947460f115597bb52a73d8d  /tmp/motion-physics.patch" | sha256sum --check --strict
+          cd project
+          patch --batch --forward -p1 < /tmp/motion-physics.patch
+          rm -f app/*.orig scripts/*.orig tests/*.orig
+          grep -n '0.22.2-marco18.motion1' package.json package-lock.json public/LEIA-ME-HOSTINGER.txt
+          node --check scripts/browser-smoke.mjs
+          node --check tests/release-critical-regressions.test.mjs
+          sha256sum app/GameExperience.tsx app/locomotionMath.mjs app/characterMotorMath.mjs package.json package-lock.json scripts/browser-smoke.mjs tests/release-critical-regressions.test.mjs > ../MOTION-PHYSICS-SOURCE-HASHES.log
+
+      - name: Setup Node 22.13.1
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.1
+          cache: npm
+          cache-dependency-path: project/package-lock.json
+
+      - name: Pin npm and record environment
+        shell: bash
+        run: |
+          npm install --global npm@11.9.0
+          {
+            uname -a
+            node --version
+            npm --version
+            google-chrome --version || true
+            cat MOTION-PHYSICS-SOURCE-HASHES.log
+          } | tee ENVIRONMENT-MOTION-PHYSICS-FINAL.log
+
+      - name: Clean npm ci
+        working-directory: project
+        shell: bash
+        run: |
+          set -o pipefail
+          npm ci 2>&1 | tee ../NPM-CI-MOTION-PHYSICS-FINAL.log
+
+      - name: Full release verification
+        working-directory: project
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run verify 2>&1 | tee ../VERIFY-MOTION-PHYSICS-FINAL.log
+
+      - name: Package exact tested source
+        working-directory: project
+        run: npm run package:source
+
+      - name: Build final delivery
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p delivery
+          cp project/release/ECHOLOOM-CIDADE-DA-RUPTURA-MINHA-VERSAO-HOSTINGER-RC1-PASSADA-1.zip \
+            delivery/ECHOLOOM-CIDADE-DA-RUPTURA-HOSTINGER-MOVIMENTO-FISICA-FINAL.zip
+          cp project/release/ECHOLOOM-CIDADE-DA-RUPTURA-CODIGO-FONTE-RC1-PASSADA-1.zip \
+            delivery/ECHOLOOM-CIDADE-DA-RUPTURA-CODIGO-FONTE-MOVIMENTO-FISICA-FINAL.zip
+          cp ENVIRONMENT-MOTION-PHYSICS-FINAL.log NPM-CI-MOTION-PHYSICS-FINAL.log VERIFY-MOTION-PHYSICS-FINAL.log MOTION-PHYSICS-SOURCE-HASHES.log delivery/
+          cat > delivery/RELATORIO-MOVIMENTO-FISICA-FINAL.txt <<'EOF'
+          ECHOLOOM — CIDADE DA RUPTURA
+          Revisão 0.22.2-marco18.motion1
+
+          Gates desta passada:
+          - Pointer Lock não mantém braços ou corpo presos na pose de disparo;
+          - clique esquerdo e tecla J ativam a pose somente enquanto pressionados;
+          - soltar o comando libera o braço sem liberar a câmera;
+          - quadril e cadeia das pernas compatíveis com o comprimento do modelo;
+          - contato suave dos pés reduz extensão, flutuação e estalos de passada;
+          - rodas usam pivôs próprios, contato individual com terreno e suspensão derivada do relevo;
+          - carro recebe pitch/roll limitados e direção suavizada;
+          - WebGPU, WebGL2, campanha, saves e ZIP público validados pela suíte integral.
+          EOF
+          find delivery -maxdepth 1 -type f ! -name SHA256SUMS-MOVIMENTO-FISICA-FINAL.txt -print0 | sort -z | xargs -0 sha256sum > delivery/SHA256SUMS-MOVIMENTO-FISICA-FINAL.txt
+          unzip -t delivery/ECHOLOOM-CIDADE-DA-RUPTURA-HOSTINGER-MOVIMENTO-FISICA-FINAL.zip
+          unzip -p delivery/ECHOLOOM-CIDADE-DA-RUPTURA-HOSTINGER-MOVIMENTO-FISICA-FINAL.zip index.html >/dev/null
+
+      - name: Upload approved movement physics package
+        uses: actions/upload-artifact@v4
+        with:
+          name: echoloom-motion-physics-hostinger-final
+          path: delivery
+          if-no-files-found: error
+          retention-days: 7
