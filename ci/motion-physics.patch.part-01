@@ -1,0 +1,184 @@
++        const pivot = new THREE.Group();
++        pivot.name = `trafficWheel-${side}-${longitudinal}`;
++        pivot.position.set(side * width * 0.52, wheelRadius, longitudinal * length * 0.3);
++        pivot.userData.wheelPivot = true;
++        pivot.userData.frontWheel = longitudinal < 0;
++        pivot.userData.restY = wheelRadius;
++        pivot.userData.radius = wheelRadius;
++        const tire = new THREE.Mesh(wheelGeometry, wheelMaterial);
++        tire.name = `${pivot.name}-tire`;
++        tire.castShadow = true;
++        pivot.add(tire);
++        group.add(pivot);
+       }
+     }
+ 
+@@ -9752,11 +9871,7 @@ grapple() {
+       if (!pursuitActive && routeAdvance(distance, 2.2)) {
+         traffic.routeIndex = (traffic.routeIndex + 1) % traffic.route.length;
+       }
+-      group.position.y = this.terrainHeight(group.position.x, group.position.z) + 0.08;
+-      const wheelSpin = traffic.speed * delta * 2.15;
+-      for (const child of group.children) {
+-        if (child.name.startsWith("trafficWheel")) child.rotation.x += wheelSpin;
+-      }
++      this.settleVehicleOnTerrain(group, group.rotation.y, traffic.speed, 0, delta);
+ 
+       if (pursuitActive && playerDistance < 3.2 && traffic.collisionCooldown <= 0) {
+         traffic.collisionCooldown = 0.7;
+@@ -9830,6 +9945,7 @@ grapple() {
+     this.vehicle = traffic.group;
+     this.vehicleYaw = traffic.group.rotation.y;
+     this.vehicleSpeed = traffic.speed;
++    this.vehicleSteerAngle = 0;
+     const stats = vehicleProfile(traffic.kind, this.currentWetness);
+     this.vehicleHealth = Math.min(this.maxVehicleHealth, Number(stats.health ?? this.maxVehicleHealth));
+     this.driving = true;
+@@ -9916,26 +10032,35 @@ grapple() {
+       car.add(light);
+     }
+ 
+-    const wheelGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.42, 16);
+-    wheelGeo.rotateZ(Math.PI / 2); // axle along local X so rotation.x spins it
++    const wheelRadius = 0.5;
++    const wheelGeo = new THREE.CylinderGeometry(wheelRadius, wheelRadius, 0.42, 16);
++    wheelGeo.rotateZ(Math.PI / 2); // axle along local X
+     const wheelMat = new THREE.MeshStandardMaterial({ color: 0x121417, roughness: 0.8, metalness: 0.1 });
+-    const wheelSpots: Array<[string, number, number]> = [
+-      ["wheelFL", -1.02, -1.4],
+-      ["wheelFR", 1.02, -1.4],
+-      ["wheelRL", -1.02, 1.45],
+-      ["wheelRR", 1.02, 1.45],
++    const wheelSpots: Array<[string, number, number, boolean]> = [
++      ["wheelFL", -1.02, -1.4, true],
++      ["wheelFR", 1.02, -1.4, true],
++      ["wheelRL", -1.02, 1.45, false],
++      ["wheelRR", 1.02, 1.45, false],
+     ];
+-    for (const [name, wx, wz] of wheelSpots) {
+-      const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+-      wheel.name = name;
+-      wheel.position.set(wx, 0.5, wz);
+-      wheel.castShadow = true;
+-      car.add(wheel);
++    for (const [name, wx, wz, frontWheel] of wheelSpots) {
++      const pivot = new THREE.Group();
++      pivot.name = name;
++      pivot.position.set(wx, wheelRadius, wz);
++      pivot.userData.wheelPivot = true;
++      pivot.userData.frontWheel = frontWheel;
++      pivot.userData.restY = wheelRadius;
++      pivot.userData.radius = wheelRadius;
++      const tire = new THREE.Mesh(wheelGeo, wheelMat);
++      tire.name = `${name}-tire`;
++      tire.castShadow = true;
++      pivot.add(tire);
++      car.add(pivot);
+     }
+ 
+     this.vehicle = car;
+     this.vehicleYaw = 0;
+     this.vehicleSpeed = 0;
++    this.vehicleSteerAngle = 0;
+     this.driving = false;
+     this.world.add(car);
+   }
+@@ -9963,6 +10088,7 @@ grapple() {
+       this.driving = true;
+       this.player.visible = false;
+       this.vehicleSpeed = 0;
++      this.vehicleSteerAngle = 0;
+       const kind = String(this.vehicle.userData.vehicleKind ?? "city");
+       const stats = vehicleProfile(kind, this.currentWetness);
+       this.vehicleHealth = Math.min(this.maxVehicleHealth, Number(stats.health ?? this.maxVehicleHealth));
+@@ -9973,6 +10099,69 @@ grapple() {
+     }
+   }
+ 
++  private settleVehicleOnTerrain(
++    car: THREE.Group,
++    yaw: number,
++    speed: number,
++    steering: number,
++    delta: number,
++  ) {
++    const wheels = car.children.filter((child) => Boolean(child.userData.wheelPivot));
++    if (!wheels.length) {
++      car.position.y = THREE.MathUtils.damp(car.position.y, this.terrainHeight(car.position.x, car.position.z) + 0.02, 12, delta);
++      car.rotation.y = yaw;
++      return;
++    }
++
++    const cos = Math.cos(yaw);
++    const sin = Math.sin(yaw);
++    const contacts = wheels.map((wheel) => {
++      const localX = wheel.position.x;
++      const localZ = wheel.position.z;
++      const worldX = car.position.x + cos * localX + sin * localZ;
++      const worldZ = car.position.z - sin * localX + cos * localZ;
++      return {
++        wheel,
++        ground: this.terrainHeight(worldX, worldZ),
++        localX,
++        localZ,
++      };
++    });
++    const average = contacts.reduce((sum, contact) => sum + contact.ground, 0) / contacts.length;
++    const front = contacts.filter((contact) => contact.localZ < 0);
++    const rear = contacts.filter((contact) => contact.localZ >= 0);
++    const left = contacts.filter((contact) => contact.localX < 0);
++    const right = contacts.filter((contact) => contact.localX >= 0);
++    const mean = (items: typeof contacts) => items.reduce((sum, contact) => sum + contact.ground, 0) / Math.max(1, items.length);
++    const localXValues = contacts.map((contact) => contact.localX);
++    const localZValues = contacts.map((contact) => contact.localZ);
++    const wheelBase = Math.max(0.8, Math.max(...localZValues) - Math.min(...localZValues));
++    const trackWidth = Math.max(0.8, Math.max(...localXValues) - Math.min(...localXValues));
++    const targetPitch = THREE.MathUtils.clamp(Math.atan2(mean(rear) - mean(front), wheelBase), -0.42, 0.42);
++    const targetRoll = THREE.MathUtils.clamp(Math.atan2(mean(left) - mean(right), trackWidth), -0.38, 0.38);
++
++    car.position.y = THREE.MathUtils.damp(car.position.y, average + 0.025, 14, delta);
++    car.rotation.y = yaw;
++    car.rotation.x = THREE.MathUtils.damp(car.rotation.x, targetPitch, 10, delta);
++    car.rotation.z = THREE.MathUtils.damp(car.rotation.z, targetRoll - steering * 0.035, 10, delta);
++
++    for (const contact of contacts) {
++      const wheel = contact.wheel;
++      const restY = Number(wheel.userData.restY ?? wheel.position.y);
++      const radius = Math.max(0.2, Number(wheel.userData.radius ?? 0.5));
++      const suspension = THREE.MathUtils.clamp((contact.ground - average) * 0.72, -0.18, 0.18);
++      wheel.position.y = THREE.MathUtils.damp(wheel.position.y, restY + suspension, 18, delta);
++      wheel.rotation.y = THREE.MathUtils.damp(
++        wheel.rotation.y,
++        wheel.userData.frontWheel ? steering * 0.46 : 0,
++        14,
++        delta,
++      );
++      const tire = wheel.children[0];
++      if (tire) tire.rotation.x += (speed * delta) / radius;
++    }
++  }
++
+   private updateVehicle(delta: number, forward: number, steer: number) {
+     const car = this.vehicle;
+     if (!car) return;
+@@ -10007,7 +10196,8 @@ grapple() {
+ 
+     const speedFactor = THREE.MathUtils.clamp(this.vehicleSpeed / 7, -1, 1);
+     const steerStrength = stats.steer * (1 - Math.min(0.48, Math.abs(this.vehicleSpeed) / Math.max(48, stats.maxSpeed * 2.7)));
+-    this.vehicleYaw -= steer * delta * steerStrength * speedFactor * THREE.MathUtils.clamp(totalTraction, 0.62, 1.18);
++    this.vehicleSteerAngle = THREE.MathUtils.damp(this.vehicleSteerAngle, steer, Math.abs(steer) > 0.02 ? 10 : 14, delta);
++    this.vehicleYaw -= this.vehicleSteerAngle * delta * steerStrength * speedFactor * THREE.MathUtils.clamp(totalTraction, 0.62, 1.18);
+ 
+     car.position.x += -Math.sin(this.vehicleYaw) * this.vehicleSpeed * delta;
+     car.position.z += -Math.cos(this.vehicleYaw) * this.vehicleSpeed * delta;
+@@ -10039,29 +10229,8 @@ grapple() {
+       }
+     }
+ 
+-    const centerHeight = this.terrainHeight(car.position.x, car.position.z);
+-    const forwardX = -Math.sin(this.vehicleYaw);
+-    const forwardZ = -Math.cos(this.vehicleYaw);
+-    const rightX = Math.cos(this.vehicleYaw);
+-    const rightZ = -Math.sin(this.vehicleYaw);
+-    const frontHeight = this.terrainHeight(car.position.x + forwardX * 1.7, car.position.z + forwardZ * 1.7);
+-    const rearHeight = this.terrainHeight(car.position.x - forwardX * 1.7, car.position.z - forwardZ * 1.7);
