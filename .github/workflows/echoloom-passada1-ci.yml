@@ -1,0 +1,96 @@
+name: ECHOLOOM Passada 1 Isolated Verify
+
+on:
+  push:
+    branches:
+      - echoloom-passada1-ci-20260801
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      CI: "true"
+      ECHOLOOM_CHROMIUM_PATH: /usr/bin/google-chrome
+    steps:
+      - name: Checkout isolated branch
+        uses: actions/checkout@v4
+
+      - name: Reconstruct and verify source payload
+        shell: bash
+        run: |
+          set -euxo pipefail
+          test "$(find payload -maxdepth 1 -type f -name 'chunk-*' | wc -l)" -eq 11
+          cat $(find payload -maxdepth 1 -type f -name 'chunk-*' | sort) | base64 --decode > echoloom-source.zip.xz
+          echo "f213c567d76958479d8eb2695d45f4f2b101baaed550d244e974ec616b1704bc  echoloom-source.zip.xz" | sha256sum --check --strict
+          xz --decompress --stdout echoloom-source.zip.xz > echoloom-source.zip
+          echo "ad59c8bfd86be6ec6460eff0348f33961b1831a8fba3b119d9f592376f161731  echoloom-source.zip" | sha256sum --check --strict
+          unzip -t echoloom-source.zip
+          mkdir project
+          unzip -q echoloom-source.zip -d project
+          test -f project/package.json
+          test -f project/package-lock.json
+
+      - name: Setup Node 22.13.1
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.1
+          cache: npm
+          cache-dependency-path: project/package-lock.json
+
+      - name: Pin npm 11.9.0
+        run: npm install --global npm@11.9.0
+
+      - name: Record environment
+        shell: bash
+        run: |
+          {
+            uname -a
+            node --version
+            npm --version
+            google-chrome --version || true
+            sha256sum echoloom-source.zip echoloom-source.zip.xz
+          } | tee ENVIRONMENT-CI.log
+
+      - name: Clean npm ci
+        working-directory: project
+        shell: bash
+        run: |
+          set -o pipefail
+          npm ci 2>&1 | tee ../NPM-CI-CLEAN-PASSADA-1-CI.log
+
+      - name: Full verify
+        working-directory: project
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run verify 2>&1 | tee ../VERIFY-CLEAN-PASSADA-1-CI.log
+
+      - name: Package tested evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p ci-artifacts
+          cp -f ENVIRONMENT-CI.log ci-artifacts/ 2>/dev/null || true
+          cp -f NPM-CI-CLEAN-PASSADA-1-CI.log ci-artifacts/ 2>/dev/null || true
+          cp -f VERIFY-CLEAN-PASSADA-1-CI.log ci-artifacts/ 2>/dev/null || true
+          cp -f echoloom-source.zip ci-artifacts/ECHOLOOM-SOURCE-TESTED-INPUT.zip 2>/dev/null || true
+          if [ -d project/release ]; then cp -a project/release ci-artifacts/release; fi
+          if [ -d project/dist-static ]; then
+            (cd project/dist-static && zip -X -q -r ../../ci-artifacts/ECHOLOOM-DIST-STATIC-CI.zip .)
+          fi
+          find ci-artifacts -type f -print0 | sort -z | xargs -0 sha256sum > ci-artifacts/SHA256SUMS-CI.txt
+
+      - name: Upload evidence and release outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: echoloom-passada1-ci-evidence
+          path: ci-artifacts
+          if-no-files-found: error
+          retention-days: 7
