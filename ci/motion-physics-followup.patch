@@ -1,0 +1,11 @@
+--- a/app/GameExperience.tsx
++++ b/app/GameExperience.tsx
+@@ -9280,7 +9280,7 @@
+     return this.runtimeSnapshot();
+   }
+ 
+-  private qaLocomotionProbe(speed = CHARACTER_MOTOR.walkSpeed, frames = 120) {
++  private qaLocomotionProbe(speed: number = CHARACTER_MOTOR.walkSpeed, frames = 120) {
+     this.setGameplayEnabled(true);
+     this.driving = false;
+     this.player.visible = true;
