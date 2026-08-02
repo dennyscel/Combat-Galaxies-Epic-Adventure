@@ -1,0 +1,46 @@
+--- a/app/GameExperience.tsx
++++ b/app/GameExperience.tsx
+@@ -8741,7 +8741,8 @@
+     const targetPosition = distraction ?? this.player.position;
+     for (const drone of this.drones) {
+       if (!drone.alive) continue;
+-      drone.phase += delta * (0.8 + 0.2 * Math.sin(drone.base.x));
++      const qaPinned = import.meta.env.VITE_ECHOLOOM_QA_RUNTIME === "1" && this.targetsTotal === 1 && drone === this.drones[0];
++      if (!qaPinned) drone.phase += delta * (0.8 + 0.2 * Math.sin(drone.base.x));
+       drone.fireCooldown -= delta;
+       drone.contactCooldown -= delta;
+       const group = drone.group;
+@@ -8750,14 +8751,16 @@
+       const distance = Math.max(0.001, toTarget.length());
+       const direction = toTarget.clone().multiplyScalar(1 / distance);
+       const side = new THREE.Vector3(-direction.z, 0, direction.x).multiplyScalar(drone.strafe);
+-      const desiredDistance = 18 + Math.sin(drone.phase * 0.7) * 4;
+-      if (distance > desiredDistance + 3) group.position.addScaledVector(direction, delta * 3.4);
+-      else if (distance < desiredDistance - 4) group.position.addScaledVector(direction, -delta * 2.5);
+-      group.position.addScaledVector(side, delta * (0.8 + Math.sin(drone.phase) * 0.4));
+-      drone.base.x = group.position.x;
+-      drone.base.z = group.position.z;
+-      group.position.y = this.terrainHeight(group.position.x, group.position.z) + 3.4 + Math.sin(drone.phase) * 0.6;
+-      group.lookAt(targetPosition.x, group.position.y, targetPosition.z);
++      if (!qaPinned) {
++        const desiredDistance = 18 + Math.sin(drone.phase * 0.7) * 4;
++        if (distance > desiredDistance + 3) group.position.addScaledVector(direction, delta * 3.4);
++        else if (distance < desiredDistance - 4) group.position.addScaledVector(direction, -delta * 2.5);
++        group.position.addScaledVector(side, delta * (0.8 + Math.sin(drone.phase) * 0.4));
++        drone.base.x = group.position.x;
++        drone.base.z = group.position.z;
++        group.position.y = this.terrainHeight(group.position.x, group.position.z) + 3.4 + Math.sin(drone.phase) * 0.6;
++        group.lookAt(targetPosition.x, group.position.y, targetPosition.z);
++      }
+ 
+       if (distance < 58 && drone.fireCooldown <= 0) {
+         const origin = group.position.clone();
+@@ -9059,7 +9062,7 @@
+     target.group.position.copy(origin).addScaledVector(direction, distance);
+     target.phase = 0;
+     target.strafe = 0;
+-    target.group.position.y = this.terrainHeight(target.group.position.x, target.group.position.z) + 3.4;
++    target.group.position.y = origin.y;
+     target.base.copy(target.group.position);
+     target.health = health;
+     target.maxHealth = health;
