@@ -1,0 +1,19 @@
+--- a/scripts/public-browser-smoke.mjs
++++ b/scripts/public-browser-smoke.mjs
+@@ -61,6 +61,7 @@
+     await page.waitForSelector(".dialogue-layer", { timeout: 120_000 });
+     await advanceDialogue(page, 30);
+     await page.waitForSelector(".crosshair", { timeout: 20_000 });
++    await page.waitForSelector(".game-hud", { timeout: 20_000 });
+     await page.waitForFunction(() => [...document.querySelectorAll(".hud-status > span")].some((item) => /\d+ FPS/.test(item.textContent ?? "")), { timeout: 20_000 });
+ 
+     const canvas = await page.$("#world-canvas");
+@@ -87,7 +88,7 @@
+       return {
+         frames,
+         fps: [...document.querySelectorAll(".hud-status > span")].map((item) => item.textContent ?? "").find((label) => /\d+ FPS/.test(label)) ?? "",
+-        hud: Boolean(document.querySelector(".hud")),
++        hud: Boolean(document.querySelector(".game-hud")),
+         crosshair: Boolean(document.querySelector(".crosshair")),
+         qaBridge: "__ECHOLOOM_QA__" in window,
+       };
