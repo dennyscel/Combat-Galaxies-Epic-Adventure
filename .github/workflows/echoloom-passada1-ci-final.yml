@@ -102,6 +102,44 @@ jobs:
           test -f project/package-lock.json
           test -f project/tests/release-critical-runtime-contracts.test.mjs
 
+      - name: Apply public QA dead-code guard
+        working-directory: project
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          game_path = Path('app/GameExperience.tsx')
+          game_source = game_path.read_text()
+          game_old = '''  private uninstallQaBridge() {
+              if (typeof window === "undefined") return;
+          '''
+          game_new = '''  private uninstallQaBridge() {
+              if (import.meta.env.VITE_ECHOLOOM_QA_RUNTIME !== "1") return;
+              if (typeof window === "undefined") return;
+          '''
+          assert game_source.count(game_old) == 1, game_source.count(game_old)
+          game_path.write_text(game_source.replace(game_old, game_new, 1))
+
+          config_path = Path('vite.static.config.mts')
+          config_source = config_path.read_text()
+          config_old = '''  plugins: [react()],
+            base: "./",
+          '''
+          config_new = '''  plugins: [react()],
+            define: {
+              "import.meta.env.VITE_ECHOLOOM_QA_RUNTIME": JSON.stringify("0"),
+            },
+            base: "./",
+          '''
+          assert config_source.count(config_old) == 1, config_source.count(config_old)
+          config_path.write_text(config_source.replace(config_old, config_new, 1))
+          PY
+          grep -n -A4 -B1 'private uninstallQaBridge' app/GameExperience.tsx
+          grep -n -A5 -B1 'VITE_ECHOLOOM_QA_RUNTIME' vite.static.config.mts
+          sha256sum app/GameExperience.tsx vite.static.config.mts
+
       - name: Setup Node 22.13.1
         uses: actions/setup-node@v4
         with:
@@ -121,6 +159,7 @@ jobs:
             npm --version
             google-chrome --version || true
             sha256sum echoloom-source.tar.xz echoloom-source.tar
+            sha256sum project/app/GameExperience.tsx project/vite.static.config.mts
           } | tee ENVIRONMENT-CI.log
 
       - name: Clean npm ci
@@ -136,6 +175,10 @@ jobs:
         run: |
           set -o pipefail
           npm run verify 2>&1 | tee ../VERIFY-CLEAN-PASSADA-1-CI.log
+
+      - name: Package patched source
+        working-directory: project
+        run: npm run package:source
 
       - name: Package tested evidence
         if: always()
