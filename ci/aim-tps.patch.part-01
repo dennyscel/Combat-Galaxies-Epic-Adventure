@@ -1,0 +1,122 @@
+uzzle);
+     bolt.velocity.copy(boltDir).multiplyScalar(80);
+     bolt.life = 1.6;
++    bolt.travelLeft = Math.min(128, muzzle.distanceTo(targetPoint));
+     bolt.active = true;
+     bolt.mesh.visible = true;
+     this.maxActivePlayerBolts = Math.max(this.maxActivePlayerBolts, this.bolts.filter((item) => item.active).length);
+@@ -8330,6 +8388,7 @@
+         velocity: new THREE.Vector3(),
+         prev: new THREE.Vector3(),
+         life: 0,
++        travelLeft: 0,
+         active: false,
+       });
+     }
+@@ -8363,6 +8422,7 @@
+         velocity: new THREE.Vector3(),
+         prev: new THREE.Vector3(),
+         life: 0,
++        travelLeft: 0,
+         active: false,
+         damage: 0,
+       });
+@@ -8491,6 +8551,7 @@
+     bolt.prev.copy(origin);
+     bolt.velocity.copy(direction).multiplyScalar(speed);
+     bolt.life = 3.2;
++    bolt.travelLeft = speed * bolt.life;
+     bolt.damage = damage;
+     bolt.active = true;
+     bolt.mesh.visible = true;
+@@ -8685,10 +8746,12 @@
+       if (!bolt.active) continue;
+       bolt.life -= delta;
+       bolt.prev.copy(bolt.mesh.position);
+-      bolt.mesh.position.addScaledVector(bolt.velocity, delta);
++      const enemyStep = Math.min(bolt.velocity.length() * delta, Math.max(0, bolt.travelLeft));
++      bolt.mesh.position.addScaledVector(bolt.velocity, enemyStep / Math.max(0.001, bolt.velocity.length()));
++      bolt.travelLeft -= enemyStep;
+       const belowGround =
+         bolt.mesh.position.y < this.terrainHeight(bolt.mesh.position.x, bolt.mesh.position.z) - 0.35;
+-      if (bolt.life <= 0 || belowGround) {
++      if (bolt.life <= 0 || bolt.travelLeft <= 0 || belowGround) {
+         bolt.active = false;
+         bolt.mesh.visible = false;
+         continue;
+@@ -8783,7 +8846,11 @@
+       if (!bolt.active) continue;
+       bolt.life -= delta;
+       bolt.prev.copy(bolt.mesh.position);
+-      bolt.mesh.position.addScaledVector(bolt.velocity, delta);
++      const boltSpeed = Math.max(0.001, bolt.velocity.length());
++      const boltStep = Math.min(boltSpeed * delta, Math.max(0, bolt.travelLeft));
++      bolt.mesh.position.addScaledVector(bolt.velocity, boltStep / boltSpeed);
++      bolt.travelLeft -= boltStep;
++      const reachedAimPoint = bolt.travelLeft <= 0.0001;
+       if (
+         bolt.life <= 0 ||
+         bolt.mesh.position.y < this.terrainHeight(bolt.mesh.position.x, bolt.mesh.position.z) - 0.5
+@@ -8903,6 +8970,11 @@
+           this.damageArconte(56);
+         }
+       }
++      if (reachedAimPoint && bolt.active) {
++        this.spawnHitBurst(bolt.mesh.position);
++        bolt.active = false;
++        bolt.mesh.visible = false;
++      }
+     }
+ 
+     this.updateEnemyBolts(delta);
+@@ -8979,6 +9051,8 @@
+         return Array.isArray(material) ? material.map((entry) => entry.uuid) : [material.uuid];
+       }))),
+     });
++    const cameraPosition = this.camera.getWorldPosition(new THREE.Vector3());
++    const cameraDirection = this.camera.getWorldDirection(new THREE.Vector3()).normalize();
+     return {
+       stage: this.stage.id,
+       backend: (this.renderer as { isWebGPURenderer?: boolean } | null)?.isWebGPURenderer ? "WEBGPU" : this.renderer ? "WEBGL 2" : "NONE",
+@@ -9008,6 +9082,15 @@
+       targetsTotal: this.targetsTotal,
+       energy: this.energy,
+       nightCharge: this.nightCharge,
++      aim: {
++        yaw: this.yaw,
++        pitch: this.pitch,
++        playerYaw: this.player.rotation.y,
++        cameraPosition: cameraPosition.toArray(),
++        cameraDirection: cameraDirection.toArray(),
++        playerPosition: this.player.position.toArray(),
++        shotDirection: this.aimDirection.toArray(),
++      },
+       scene: {
+         meshes: meshIds.length,
+         meshIds,
+@@ -9072,7 +9155,7 @@
+     target.contactCooldown = 999;
+     this.targetsTotal = 1;
+     this.callbacks.onCombat(1, 1, this.energy);
+-    for (const bolt of this.bolts) { bolt.active = false; bolt.life = 0; bolt.mesh.visible = false; }
++    for (const bolt of this.bolts) { bolt.active = false; bolt.life = 0; bolt.travelLeft = 0; bolt.mesh.visible = false; }
+     for (const burst of this.bursts) { burst.life = 0; burst.mesh.visible = false; }
+     return this.runtimeSnapshot();
+   }
+@@ -9105,7 +9188,7 @@
+     for (const npc of this.livingNpcs) npc.group.visible = false;
+     for (const enemy of this.groundEnemies) { enemy.alive = false; enemy.group.visible = false; }
+     for (const drone of this.drones) { drone.alive = false; drone.group.visible = false; }
+-    for (const bolt of this.bolts) { bolt.active = false; bolt.life = 0; bolt.mesh.visible = false; }
++    for (const bolt of this.bolts) { bolt.active = false; bolt.life = 0; bolt.travelLeft = 0; bolt.mesh.visible = false; }
+     for (const burst of this.bursts) { burst.life = 0; burst.mesh.visible = false; }
+     this.targetsTotal = 0;
+     this.callbacks.onCombat(0, 0, this.energy);
+@@ -9166,6 +9249,7 @@
+       waitForPrewarm: async () => { await this.combatPrewarmPromise; return this.runtimeSnapshot(); },
+       prepareCombatFixture: (distance?: number, health?: number) => this.prepareQaCombatFixture(distance, health),
+       prepareEmptyCombatFixture: () => this.prepareQaEmptyCombatFixture(),
++      rotateAim: (dx = 0, dy = 0) => { this.rotateCamera(dx, dy); return this.runtimeSnapshot(); },
+       acceptedFire: (simulateHit = false) => this.qaAcceptedFire(simulateHit),
+       tenSynchronousAttempts: () => { for (let index = 0; index < 10; index += 1) this.fire(); return this.runtimeSnapshot(); },
+       setNig
