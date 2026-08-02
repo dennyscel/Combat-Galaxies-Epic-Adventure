@@ -42,6 +42,12 @@ jobs:
             payload/chunk-16
             payload/chunk-18
             payload/chunk-20
+            payload/chunk-22
+            payload/chunk-24
+            payload/chunk-26
+            payload/chunk-28
+            payload/chunk-30
+            payload/chunk-32
           )
           for payload_file in "${payload_files[@]}"; do test -f "$payload_file"; done
           cat "${payload_files[@]}" | base64 --decode > echoloom-source.zip.xz
