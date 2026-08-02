@@ -27,8 +27,24 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          test "$(find payload -maxdepth 1 -type f -name 'chunk-*' | wc -l)" -eq 11
-          cat $(find payload -maxdepth 1 -type f -name 'chunk-*' | sort) | base64 --decode > echoloom-source.zip.xz
+          payload_files=(
+            payload/chunk-00
+            payload/chunk-01
+            payload/chunk-02
+            payload/chunk-03
+            payload/chunk-04
+            payload/chunk-05
+            payload/chunk-06
+            payload/chunk-08
+            payload/chunk-10
+            payload/chunk-12
+            payload/chunk-14
+            payload/chunk-16
+            payload/chunk-18
+            payload/chunk-20
+          )
+          for payload_file in "${payload_files[@]}"; do test -f "$payload_file"; done
+          cat "${payload_files[@]}" | base64 --decode > echoloom-source.zip.xz
           echo "f213c567d76958479d8eb2695d45f4f2b101baaed550d244e974ec616b1704bc  echoloom-source.zip.xz" | sha256sum --check --strict
           xz --decompress --stdout echoloom-source.zip.xz > echoloom-source.zip
           echo "ad59c8bfd86be6ec6460eff0348f33961b1831a8fba3b119d9f592376f161731  echoloom-source.zip" | sha256sum --check --strict
