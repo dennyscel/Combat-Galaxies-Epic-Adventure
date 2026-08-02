@@ -51,10 +51,12 @@ jobs:
           echo "6cbe27e2d3c11014e9d2c63e938936b5c924e0a8e2069bd154c14ddff10db1fc  ci/motion-physics.patch.part-02" | sha256sum --check --strict
           echo "a540e10961cc54121e2ef02b72c77ba418ecd208745b5354cc5defce8908f912  ci/motion-physics.patch.part-03" | sha256sum --check --strict
           echo "61e385b9254e32756dcc14a9edfa96d7a249a1b195fdc6b408155fce66052bf6  ci/motion-physics.patch.part-04" | sha256sum --check --strict
+          echo "55878027a32c82a0cfefb8727f2f4ba2ef78722467f2937919904f45ae9f86ea  ci/motion-physics-followup.patch" | sha256sum --check --strict
           cat ci/motion-physics.patch.part-* > /tmp/motion-physics.patch
           echo "5df7e83ab20f2a49aa336c364b9b7606560fb4fa6947460f115597bb52a73d8d  /tmp/motion-physics.patch" | sha256sum --check --strict
           cd project
           patch --batch --forward -p1 < /tmp/motion-physics.patch
+          patch --batch --forward -p1 < ../ci/motion-physics-followup.patch
           rm -f app/*.orig scripts/*.orig tests/*.orig
           grep -n '0.22.2-marco18.motion1' package.json package-lock.json public/LEIA-ME-HOSTINGER.txt
           node --check scripts/browser-smoke.mjs
