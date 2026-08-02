@@ -92,8 +92,10 @@ jobs:
           patch --batch --forward -p1 < ../ci/browser-cleanup.patch
           patch --batch --forward -p1 < ../ci/qa-drone-pin.patch
           patch --batch --forward -p1 < ../ci/qa-bolt-target.patch
+          patch --batch --forward -p1 < ../ci/frame-delta.patch
           node --check scripts/browser-test-runtime.mjs
           grep -n -A12 -B2 'qaAcceptedFire' app/GameExperience.tsx
+          grep -n -A5 -B2 'measuredDelta' app/GameExperience.tsx
           sha256sum app/GameExperience.tsx vite.static.config.mts scripts/browser-test-runtime.mjs
 
       - name: Setup Node 22.13.1
