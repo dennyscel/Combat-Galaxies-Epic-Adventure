@@ -1,0 +1,123 @@
+--- a/app/GameExperience.tsx	2000-01-01 00:00:00.000000000 +0000
++++ b/app/GameExperience.tsx	2026-08-02 02:41:54.851362508 +0000
+@@ -354,6 +354,7 @@
+   velocity: THREE.Vector3;
+   prev: THREE.Vector3;
+   life: number;
++  travelLeft: number;
+   active: boolean;
+ };
+ 
+@@ -1953,6 +1954,7 @@
+   private grounded = true;
+   private yaw = 0;
+   private pitch = -0.12;
++  private aimRaycaster = new THREE.Raycaster();
+   private pointerId: number | null = null;
+   private pointerX = 0;
+   private pointerY = 0;
+@@ -8114,6 +8116,52 @@
+     this.callbacks.onCombat(this.targetsTotal, this.targetsTotal, this.energy);
+   }
+ 
++  private isCameraAiming() {
++    return this.pointerLocked || this.firing || this.keys.has("fire") || this.weaving || this.inputLabel === "CONTROLE" || this.inputLabel === "TOQUE";
++  }
++
++  private belongsTo(object: THREE.Object3D, root: THREE.Object3D) {
++    let current: THREE.Object3D | null = object;
++    while (current) {
++      if (current === root) return true;
++      current = current.parent;
++    }
++    return false;
++  }
++
++  private isAimRayIgnored(object: THREE.Object3D) {
++    if (!object.visible) return true;
++    let current: THREE.Object3D | null = object.parent;
++    while (current) {
++      if (!current.visible) return true;
++      current = current.parent;
++    }
++    if (
++      this.belongsTo(object, this.player) ||
++      this.belongsTo(object, this.nima) ||
++      this.belongsTo(object, this.echoGhost) ||
++      this.belongsTo(object, this.weaveField)
++    ) return true;
++    if (object === this.cloudLayer || object === this.sunDisc || object === this.rain) return true;
++    if (object instanceof THREE.Points || object instanceof THREE.Line || object instanceof THREE.LineSegments || object instanceof THREE.Sprite) return true;
++    const kind = String(object.userData.kind ?? "");
++    if (["bolt", "stars", "pathMarker", "shard"].includes(kind)) return true;
++    if (object instanceof THREE.Mesh) {
++      const materials = Array.isArray(object.material) ? object.material : [object.material];
++      if (materials.some((material) => material.side === THREE.BackSide)) return true;
++    }
++    return false;
++  }
++
++  private raycastAimPoint(origin: THREE.Vector3, direction: THREE.Vector3, far = 140) {
++    this.aimRaycaster.near = 0.08;
++    this.aimRaycaster.far = far;
++    this.aimRaycaster.set(origin, direction);
++    const intersections = this.aimRaycaster.intersectObject(this.world, true);
++    const hit = intersections.find((intersection) => !this.isAimRayIgnored(intersection.object));
++    return hit?.point.clone() ?? origin.clone().addScaledVector(direction, far);
++  }
++
+   fire() {
+     this.fireAttempts += 1;
+     if (!this.gameplayEnabled || !this.player || this.driving) {
+@@ -8151,19 +8199,22 @@
+     this.fireAccepted += 1;
+     this.audio.shot();
+ 
+-    // Crosshair ray: from the camera through the centre of the screen.
++    // TPS aim: the centre crosshair follows the camera view, never the body.
++    // First resolve the point seen by the camera, then launch from KAI-R's
++    // right-hand muzzle toward that point. A second ray below prevents a
++    // shoulder camera from shooting through a wall that blocks the muzzle.
+     const camPos = this.camera.getWorldPosition(new THREE.Vector3());
+-    const rayDir = this.camera.getWorldDirection(new THREE.Vector3());
+-
+-    const muzzle = new THREE.Vector3(
+-      this.player.position.x,
+-      this.player.position.y + 1.35,
+-      this.player.position.z,
+-    ).addScaledVector(rayDir, 0.6);
+-
+-    // Aim assist: if an alive drone sits within a small cone of the crosshair,
+-    // fire straight at it — so pointing near a drone reliably connects.
+-    let targetPoint: THREE.Vector3 | null = null;
++    const rayDir = this.camera.getWorldDirection(new THREE.Vector3()).normalize();
++    const playerForward = new THREE.Vector3(-Math.sin(this.player.rotation.y), 0, -Math.cos(this.player.rotation.y));
++    const playerRight = new THREE.Vector3(Math.cos(this.player.rotation.y), 0, -Math.sin(this.player.rotation.y));
++    const muzzle = this.player.position.clone()
++      .add(new THREE.Vector3(0, 1.42, 0))
++      .addScaledVector(playerRight, 0.34)
++      .addScaledVector(playerForward, 0.52);
++
++    // The unassisted aim point is the first real world surface under the
++    // crosshair. Aim assist may select a nearby live target inside its cone.
++    let targetPoint: THREE.Vector3 | null = this.raycastAimPoint(camPos, rayDir, 140);
+     const aimInput = this.inputLabel === "CONTROLE" ? "gamepad" : this.inputLabel === "TOQUE" ? "touch" : "mouse";
+     let bestScore = aimAssistThreshold(this.settings.aimAssist, aimInput);
+     const toDrone = new THREE.Vector3();
+@@ -8293,7 +8344,13 @@
+     if (this.stage.id === "aurora") this.raiseAlert(0.035);
+     if (!targetPoint) targetPoint = camPos.clone().addScaledVector(rayDir, 140);
+ 
+-    const boltDir = targetPoint.clone().sub(muzzle).normalize();
++    let boltDir = targetPoint.clone().sub(muzzle).normalize();
++    const targetDistance = Math.max(0.2, muzzle.distanceTo(targetPoint));
++    const muzzleImpact = this.raycastAimPoint(muzzle, boltDir, targetDistance);
++    if (muzzleImpact.distanceToSquared(muzzle) < targetDistance * targetDistance - 0.01) {
++      targetPoint = muzzleImpact;
++      boltDir = targetPoint.clone().sub(muzzle).normalize();
++    }
+     this.aimDirection.copy(boltDir);
+ 
+     const bolt = this.acquireBolt();
+@@ -8301,6 +8358,7 @@
+     bolt.prev.copy(m
