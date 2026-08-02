@@ -1,0 +1,18 @@
+--- a/app/GameExperience.tsx
++++ b/app/GameExperience.tsx
+@@ -9081,6 +9081,15 @@
+     this.elapsed = Math.max(this.elapsed + 0.15, this.lastFireTime + 0.15);
+     this.energy = Math.max(this.energy, 0.5);
+     this.fire();
++    if (simulateHit) {
++      const bolt = this.bolts.find((candidate) => candidate.active);
++      const target = this.drones.find((candidate) => candidate.alive);
++      if (bolt && target) {
++        const speed = Math.max(1, bolt.velocity.length());
++        target.group.position.copy(bolt.mesh.position).addScaledVector(bolt.velocity, 2 / speed);
++        target.base.copy(target.group.position);
++      }
++    }
+     const steps = simulateHit ? 16 : 100;
+     for (let index = 0; index < steps; index += 1) this.updateCombat(1 / 60);
+     return this.runtimeSnapshot();
