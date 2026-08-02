@@ -30,7 +30,8 @@ jobs:
           payload_files=(
             payload/chunk-00
             payload/chunk-01
-            payload/chunk-02
+            payload/chunk-02a
+            payload/chunk-02b
             payload/chunk-03
             payload/chunk-04
             payload/chunk-05
@@ -52,7 +53,8 @@ jobs:
           payload_blob_sha=(
             ab5390b8d8de6f4e0e784996370514e276d04cf2
             549f6e17e1c4c878aac10a05ad7e788a8dd38f53
-            52d0483e50a1f300b9a2f132081161b1253983ff
+            aa0b28a425fa0b6eb206129dd81a02a1c15a9297
+            715e9da02c4e8257be033e3f2e5879124741bb80
             74db2f0497d94722770c83ac95575cb2488dabda
             a12c45a52cc2b39c751888a6d14cfb869088da91
             2581cbe39e68769551bbb26fa3807696b18305a7
