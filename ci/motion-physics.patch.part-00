@@ -1,0 +1,189 @@
+diff --git a/app/GameExperience.tsx b/app/GameExperience.tsx
+index 34d6d77..86c9a64 100644
+--- a/app/GameExperience.tsx
++++ b/app/GameExperience.tsx
+@@ -2036,6 +2036,9 @@ class EcholoomEngine {
+   private combatCleared = false;
+   private aimDirection = new THREE.Vector3(0, 0, -1);
+   private firing = false;
++  private mouseFiring = false;
++  private touchFiring = false;
++  private gamepadFiring = false;
+   private fireAttempts = 0;
+   private fireAccepted = 0;
+   private fireRejectedCooldown = 0;
+@@ -2062,6 +2065,7 @@ class EcholoomEngine {
+   private driving = false;
+   private vehicleYaw = 0;
+   private vehicleSpeed = 0;
++  private vehicleSteerAngle = 0;
+   private wheelSpin = 0;
+   private nearVehicle = false;
+   private livingNpcs: LivingNpcRuntime[] = [];
+@@ -7854,6 +7858,7 @@ grapple() {
+     }
+     this.velocity.set(0, 0, 0);
+     this.vehicleSpeed = 0;
++    this.vehicleSteerAngle = 0;
+     this.reportMobility(true);
+     this.reportLivingWorld(true);
+   }
+@@ -8117,7 +8122,23 @@ grapple() {
+   }
+ 
+   private isCameraAiming() {
+-    return this.pointerLocked || this.firing || this.keys.has("fire") || this.weaving || this.inputLabel === "CONTROLE" || this.inputLabel === "TOQUE";
++    // Pointer Lock only captures relative mouse movement. It must never freeze
++    // KAI-R in the combat pose. Arms/body aim only while a real fire or weave
++    // command is actively held, and return to locomotion as soon as it ends.
++    return this.firing || this.keys.has("fire") || this.weaving;
++  }
++
++  private syncFiringState() {
++    this.firing = this.mouseFiring || this.touchFiring || this.gamepadFiring;
++  }
++
++  private requestAimPointerLock() {
++    if (this.pointerLocked || !this.canvas.requestPointerLock) return;
++    try {
++      void Promise.resolve(this.canvas.requestPointerLock()).catch(() => undefined);
++    } catch {
++      // Pointer Lock is optional; drag/free-look fallbacks remain available.
++    }
+   }
+ 
+   private belongsTo(object: THREE.Object3D, root: THREE.Object3D) {
+@@ -9062,6 +9083,23 @@ grapple() {
+     const playerScreen = this.player.position.clone()
+       .add(new THREE.Vector3(0, 1.45, 0))
+       .project(this.camera);
++    this.player.updateMatrixWorld(true);
++    const soleState = (name: string) => {
++      const sole = this.player.getObjectByName(name);
++      if (!sole) return null;
++      const position = sole.getWorldPosition(new THREE.Vector3());
++      const ground = this.terrainHeight(position.x, position.z);
++      return { position: position.toArray(), ground, clearance: position.y - ground };
++    };
++    const vehicleWheels = this.vehicle
++      ? this.vehicle.children.filter((child) => Boolean(child.userData.wheelPivot)).map((wheel) => {
++          const tire = wheel.children[0] ?? wheel;
++          const position = tire.getWorldPosition(new THREE.Vector3());
++          const radius = Math.max(0.2, Number(wheel.userData.radius ?? 0.5));
++          const ground = this.terrainHeight(position.x, position.z);
++          return { name: wheel.name, clearance: position.y - radius - ground };
++        })
++      : [];
+     return {
+       stage: this.stage.id,
+       backend: (this.renderer as { isWebGPURenderer?: boolean } | null)?.isWebGPURenderer ? "WEBGPU" : this.renderer ? "WEBGL 2" : "NONE",
+@@ -9091,6 +9129,30 @@ grapple() {
+       targetsTotal: this.targetsTotal,
+       energy: this.energy,
+       nightCharge: this.nightCharge,
++      controls: {
++        pointerLocked: this.pointerLocked,
++        firing: this.firing,
++        mouseFiring: this.mouseFiring,
++        touchFiring: this.touchFiring,
++        gamepadFiring: this.gamepadFiring,
++        keyboardFiring: this.keys.has("fire"),
++        aimPoseBlend: this.aimPoseBlend,
++      },
++      locomotion: {
++        state: this.locomotionState,
++        grounded: this.grounded,
++        hipHeight: HIP_HEIGHT,
++        leftSole: soleState("leftSole"),
++        rightSole: soleState("rightSole"),
++      },
++      vehicleState: {
++        driving: this.driving,
++        speed: this.vehicleSpeed,
++        steerAngle: this.vehicleSteerAngle,
++        position: this.vehicle?.position.toArray() ?? null,
++        rotation: this.vehicle ? [this.vehicle.rotation.x, this.vehicle.rotation.y, this.vehicle.rotation.z] : null,
++        wheels: vehicleWheels,
++      },
+       aim: {
+         yaw: this.yaw,
+         pitch: this.pitch,
+@@ -9205,6 +9267,52 @@ grapple() {
+     return this.runtimeSnapshot();
+   }
+ 
++  private qaControlPose(source: "mouse" | "keyboard" | "gamepad" | "pointer", active: boolean, frames = 45) {
++    if (source === "mouse") this.mouseFiring = active;
++    if (source === "gamepad") this.gamepadFiring = active;
++    if (source === "keyboard") {
++      if (active) this.keys.add("fire");
++      else this.keys.delete("fire");
++    }
++    if (source === "pointer") this.pointerLocked = active;
++    this.syncFiringState();
++    for (let index = 0; index < Math.max(1, frames); index += 1) this.visualUpdate(1 / 60);
++    return this.runtimeSnapshot();
++  }
++
++  private qaLocomotionProbe(speed = CHARACTER_MOTOR.walkSpeed, frames = 120) {
++    this.setGameplayEnabled(true);
++    this.driving = false;
++    this.player.visible = true;
++    this.player.rotation.y = 0;
++    this.grounded = true;
++    this.velocity.set(0, 0, -Math.max(0.2, speed));
++    this.locomotionState = speed > CHARACTER_MOTOR.runSpeed ? "sprint" : speed > CHARACTER_MOTOR.walkSpeed + 0.45 ? "run" : "walk";
++    for (let index = 0; index < Math.max(1, frames); index += 1) {
++      this.player.position.z -= speed / 60;
++      this.player.position.y = this.terrainHeight(this.player.position.x, this.player.position.z) + 0.011;
++      this.visualUpdate(1 / 60);
++    }
++    const snapshot = this.runtimeSnapshot();
++    this.velocity.set(0, 0, 0);
++    return snapshot;
++  }
++
++  private qaVehicleProbe(frames = 150) {
++    const car = this.vehicle;
++    if (!car) throw new Error("fixture sem veículo");
++    this.setGameplayEnabled(true);
++    this.driving = true;
++    this.player.visible = false;
++    this.vehicleSpeed = 0;
++    this.vehicleSteerAngle = 0;
++    for (let index = 0; index < Math.max(1, frames); index += 1) {
++      const steering = index < frames * 0.65 ? 0.55 : 0;
++      this.updateVehicle(1 / 60, index < frames * 0.8 ? 0.72 : 0, steering);
++    }
++    return this.runtimeSnapshot();
++  }
++
+   private async prewarmCombatResources() {
+     const renderer = this.renderer as any;
+     if (!renderer || this.disposed) {
+@@ -9260,6 +9368,9 @@ grapple() {
+       prepareCombatFixture: (distance?: number, health?: number) => this.prepareQaCombatFixture(distance, health),
+       prepareEmptyCombatFixture: () => this.prepareQaEmptyCombatFixture(),
+       rotateAim: (dx = 0, dy = 0) => { this.rotateCamera(dx, dy); return this.runtimeSnapshot(); },
++      controlPose: (source: "mouse" | "keyboard" | "gamepad" | "pointer", active: boolean, frames?: number) => this.qaControlPose(source, active, frames),
++      locomotionProbe: (speed?: number, frames?: number) => this.qaLocomotionProbe(speed, frames),
++      vehicleProbe: (frames?: number) => this.qaVehicleProbe(frames),
+       acceptedFire: (simulateHit = false) => this.qaAcceptedFire(simulateHit),
+       tenSynchronousAttempts: () => { for (let index = 0; index < 10; index += 1) this.fire(); return this.runtimeSnapshot(); },
+       setNightProbe: (charge = 35) => { this.stage = STAGES[5]; this.nightPhase = "scavenge"; this.nightCharge = charge; this.energy = 1; this.lastFireTime = -999; this.resetQaCounters(); return this.runtimeSnapshot(); },
+@@ -9446,16 +9557,24 @@ grapple() {
+     cabin.castShadow = true;
+     group.add(cabin);
+ 
+-    const wheelGeometry = new THREE.CylinderGeometry(kind === "truck" ? 0.5 : 0.42, kind === "truck" ? 0.5 : 0.42, 0.34, 14);
++    const wheelRadius = kind === "truck" ? 0.5 : 0.42;
++    const wheelGeometry = new THREE.CylinderGeometry(wheelRadius, wheelRadius, 0.34, 14);
+     wheelGeometry.rotateZ(Math.PI / 2);
+     const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0x111417, roughness: 0.86, metalness: 0.08 });
+     for (const side of [-1, 1]) {
+       for (const longitudinal of [-1, 1]) {
+-        const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+-        wheel.name = `trafficWheel-${side}-${longitudinal}`;
+-        wheel.position.set(side * width * 0.52, 0.42, longitudinal * length * 0.3);
+-        wheel.castShadow = true;
+-        group.add(wheel);
