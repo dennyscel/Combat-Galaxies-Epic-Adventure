@@ -1,0 +1,193 @@
+diff --git a/app/GameExperience.tsx b/app/GameExperience.tsx
+index 85955df..c045520 100644
+--- a/app/GameExperience.tsx
++++ b/app/GameExperience.tsx
+@@ -1925,6 +1925,8 @@ class AdaptiveAudio {
+   }
+ }
+ 
++const VEHICLE_INTERACTION_RADIUS = 5.8;
++
+ class EcholoomEngine {
+   private canvas: HTMLCanvasElement;
+   private callbacks: EngineCallbacks;
+@@ -9313,6 +9315,22 @@ grapple() {
+     return this.runtimeSnapshot();
+   }
+ 
++  private qaPrepareVehicleEntryFixture(phase: ProloguePhase = "rescue", distance = 2.4) {
++    if (!this.vehicle) throw new Error("fixture sem veículo");
++    this.setGameplayEnabled(true);
++    this.forceExitVehicle();
++    this.stage = STAGES[0];
++    this.missionPhase = phase;
++    this.vehicleSpeed = 0;
++    this.vehicleSteerAngle = 0;
++    const side = new THREE.Vector3(Math.cos(this.vehicleYaw), 0, -Math.sin(this.vehicleYaw));
++    this.player.position.copy(this.vehicle.position).addScaledVector(side, Math.max(1.2, distance));
++    this.player.position.y = this.terrainHeight(this.player.position.x, this.player.position.z) + 0.011;
++    this.player.visible = true;
++    this.nearVehicle = true;
++    return this.runtimeSnapshot();
++  }
++
+   private async prewarmCombatResources() {
+     const renderer = this.renderer as any;
+     if (!renderer || this.disposed) {
+@@ -9371,6 +9389,7 @@ grapple() {
+       controlPose: (source: "mouse" | "keyboard" | "gamepad" | "pointer", active: boolean, frames?: number) => this.qaControlPose(source, active, frames),
+       locomotionProbe: (speed?: number, frames?: number) => this.qaLocomotionProbe(speed, frames),
+       vehicleProbe: (frames?: number) => this.qaVehicleProbe(frames),
++      prepareVehicleEntryFixture: (phase?: ProloguePhase, distance?: number) => this.qaPrepareVehicleEntryFixture(phase, distance),
+       acceptedFire: (simulateHit = false) => this.qaAcceptedFire(simulateHit),
+       tenSynchronousAttempts: () => { for (let index = 0; index < 10; index += 1) this.fire(); return this.runtimeSnapshot(); },
+       setNightProbe: (charge = 35) => { this.stage = STAGES[5]; this.nightPhase = "scavenge"; this.nightCharge = charge; this.energy = 1; this.lastFireTime = -999; this.resetQaCounters(); return this.runtimeSnapshot(); },
+@@ -9919,13 +9938,20 @@ grapple() {
+     this.reportLivingWorld();
+   }
+ 
+-  private nearestTrafficVehicle(maxDistance = 4.8) {
++  private horizontalDistanceTo(position: THREE.Vector3) {
++    return Math.hypot(
++      this.player.position.x - position.x,
++      this.player.position.z - position.z,
++    );
++  }
++
++  private nearestTrafficVehicle(maxDistance = VEHICLE_INTERACTION_RADIUS) {
+     let nearest: TrafficVehicleRuntime | null = null;
+     let distance = maxDistance;
+     for (const traffic of this.trafficVehicles) {
+       if (!traffic.active || traffic.controlled) continue;
+-      const current = this.player.position.distanceTo(traffic.group.position);
+-      if (current < distance) {
++      const current = this.horizontalDistanceTo(traffic.group.position);
++      if (current <= distance) {
+         distance = current;
+         nearest = traffic;
+       }
+@@ -10067,8 +10093,8 @@ grapple() {
+ 
+   toggleVehicle() {
+     if (!this.gameplayEnabled) return;
+-    if (this.stage.id === "prologue" && (this.missionPhase === "crash" || this.missionPhase === "rescue")) {
+-      this.callbacks.onSoundCue("Resgate os civis antes de usar o veículo");
++    if (this.stage.id === "prologue" && this.missionPhase === "crash") {
++      this.callbacks.onSoundCue("Afaste-se da zona de queda antes de usar o veículo");
+       return;
+     }
+     if (this.driving) {
+@@ -10078,13 +10104,13 @@ grapple() {
+     }
+ 
+     const traffic = this.nearestTrafficVehicle();
+-    const missionDistance = this.vehicle ? this.player.position.distanceTo(this.vehicle.position) : Infinity;
+-    const trafficDistance = traffic ? this.player.position.distanceTo(traffic.group.position) : Infinity;
++    const missionDistance = this.vehicle ? this.horizontalDistanceTo(this.vehicle.position) : Infinity;
++    const trafficDistance = traffic ? this.horizontalDistanceTo(traffic.group.position) : Infinity;
+     if (traffic && trafficDistance <= missionDistance) {
+       this.assumeTrafficVehicle(traffic);
+       return;
+     }
+-    if (this.vehicle && missionDistance < 4.8) {
++    if (this.vehicle && missionDistance <= VEHICLE_INTERACTION_RADIUS) {
+       this.driving = true;
+       this.player.visible = false;
+       this.vehicleSpeed = 0;
+@@ -10888,8 +10914,8 @@ grapple() {
+       }) as CharacterLocomotionState;
+ 
+       if (this.vehicle || this.trafficVehicles.length) {
+-        const missionNear = this.vehicle ? this.player.position.distanceTo(this.vehicle.position) < 4.8 : false;
+-        const trafficNear = Boolean(this.nearestTrafficVehicle(4.8));
++        const missionNear = this.vehicle ? this.horizontalDistanceTo(this.vehicle.position) <= VEHICLE_INTERACTION_RADIUS : false;
++        const trafficNear = Boolean(this.nearestTrafficVehicle(VEHICLE_INTERACTION_RADIUS));
+         const near = missionNear || trafficNear;
+         if (near && !this.nearVehicle) this.callbacks.onSoundCue("Aperte V para dirigir");
+         this.nearVehicle = near;
+diff --git a/package-lock.json b/package-lock.json
+index 5f329ad..ae8d9da 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1,12 +1,12 @@
+ {
+   "name": "echoloom-cidade-da-ruptura-unificado",
+-  "version": "0.22.2-marco18.motion1",
++  "version": "0.22.3-marco18.vehicle1",
+   "lockfileVersion": 3,
+   "requires": true,
+   "packages": {
+     "": {
+       "name": "echoloom-cidade-da-ruptura-unificado",
+-      "version": "0.22.2-marco18.motion1",
++      "version": "0.22.3-marco18.vehicle1",
+       "dependencies": {
+         "react": "19.2.6",
+         "react-dom": "19.2.6",
+diff --git a/package.json b/package.json
+index 6f4dbf4..e6deb0d 100644
+--- a/package.json
++++ b/package.json
+@@ -1,7 +1,7 @@
+ {
+   "name": "echoloom-cidade-da-ruptura-unificado",
+   "private": true,
+-  "version": "0.22.2-marco18.motion1",
++  "version": "0.22.3-marco18.vehicle1",
+   "type": "module",
+   "engines": {
+     "node": ">=22.13.0",
+diff --git a/public/LEIA-ME-HOSTINGER.txt b/public/LEIA-ME-HOSTINGER.txt
+index 9b495c2..aa58acf 100644
+--- a/public/LEIA-ME-HOSTINGER.txt
++++ b/public/LEIA-ME-HOSTINGER.txt
+@@ -3,7 +3,7 @@ ECHOLOOM: CIDADE DA RUPTURA — MARCO 18 — RELEASE CANDIDATE 1
+ 
+ Motor oficial: Three.js/WebGPU com fallback WebGL2.
+ Fonte principal: app/GameExperience.tsx.
+-Versão: 0.22.2-marco18.motion1.
++Versão: 0.22.3-marco18.vehicle1.
+ 
+ BUILD
+ -----
+diff --git a/scripts/browser-smoke.mjs b/scripts/browser-smoke.mjs
+index 0a0345f..6b5f578 100644
+--- a/scripts/browser-smoke.mjs
++++ b/scripts/browser-smoke.mjs
+@@ -191,6 +191,14 @@ async function exerciseRuntime(browser, origin, mode) {
+     assert.ok(live.fixedUpdateCount > countersBefore.fixedUpdateCount, `${mode}: fixed update não avançou`);
+     assert.equal(live.loopErrors, countersBefore.loopErrors, `${mode}: loop registrou erro após os disparos`);
+ 
++    await page.evaluate(() => window.__ECHOLOOM_QA__.prepareVehicleEntryFixture("rescue", 2.4));
++    await page.keyboard.press("v");
++    const vehicleEntry = await page.evaluate(() => window.__ECHOLOOM_QA__.snapshot());
++    assert.equal(vehicleEntry.vehicleState.driving, true, `${mode}: tecla V não entrou no veículo durante o resgate do Prólogo`);
++    await page.keyboard.press("v");
++    const vehicleExit = await page.evaluate(() => window.__ECHOLOOM_QA__.snapshot());
++    assert.equal(vehicleExit.vehicleState.driving, false, `${mode}: segunda tecla V não saiu do veículo`);
++
+     const vehicleProbe = await page.evaluate(() => window.__ECHOLOOM_QA__.vehicleProbe(150));
+     assert.equal(vehicleProbe.vehicleState.driving, true, `${mode}: probe de veículo não entrou em condução`);
+     assert.equal(vehicleProbe.vehicleState.wheels.length, 4, `${mode}: veículo não manteve quatro rodas vinculadas`);
+diff --git a/tests/release-critical-regressions.test.mjs b/tests/release-critical-regressions.test.mjs
+index 5df0e97..86fbb5f 100644
+--- a/tests/release-critical-regressions.test.mjs
++++ b/tests/release-critical-regressions.test.mjs
+@@ -147,6 +147,17 @@ test("regressão de locomoção: pés usam contato suave e nunca congelam por me
+   assert.doesNotMatch(visual, /shouldPlant \? 1 : 0/);
+ });
+ 
++test("regressão de veículo: tecla V pode assumir o carro durante o resgate do Prólogo", () => {
++  const toggle = between("  toggleVehicle()", "  private settleVehicleOnTerrain");
++  assert.match(toggle, /missionPhase === "crash"/);
++  assert.doesNotMatch(toggle, /missionPhase === "rescue"/);
++  assert.match(toggle, /horizontalDistanceTo/);
++  assert.match(toggle, /VEHICLE_INTERACTION_RADIUS/);
++  const keyDown = between("private onKeyDown", "private onKeyUp");
++  assert.match(keyDown, /action === "vehicle"/);
++  assert.match(keyDown, /this\.toggleVehicle\(\)/);
++});
++
+ test("regressão de veículo: rodas usam pivôs, contato individual e suspensão derivada do terreno", () => {
+   const settle = between("  private settleVehicleOnTerrain", "  private updateVehicle");
+   assert.match(settle, /wheelPivot/);
