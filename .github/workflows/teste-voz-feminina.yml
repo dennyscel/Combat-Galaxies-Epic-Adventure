@@ -1,0 +1,77 @@
+name: Teste voz feminina
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  gerar-audio:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Baixar codigo
+        uses: actions/checkout@v4
+
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar dependencias
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg zip
+          python -m pip install --upgrade pip
+          python -m pip install edge-tts
+
+      - name: Gerar voz feminina brasileira
+        run: |
+          mkdir -p saida_teste_feminino
+          cat > saida_teste_feminino/texto_teste.txt <<'TEXTO'
+          Olá! Este é um teste de voz feminina para a nossa Fábrica de Vídeos. A narração deve soar clara, natural, acolhedora e profissional. Em breve, vamos criar novos vídeos com a voz, o ritmo e a trilha perfeitos para cada projeto.
+          TEXTO
+
+          edge-tts \
+            --voice pt-BR-FranciscaNeural \
+            --rate=-3% \
+            --pitch=+0Hz \
+            --file saida_teste_feminino/texto_teste.txt \
+            --write-media saida_teste_feminino/VOZ_FEMININA_BRUTA.mp3 \
+            --write-subtitles saida_teste_feminino/VOZ_FEMININA_TESTE.srt
+
+          ffmpeg -y -hide_banner -loglevel warning \
+            -i saida_teste_feminino/VOZ_FEMININA_BRUTA.mp3 \
+            -af "highpass=f=65,lowpass=f=13000,acompressor=threshold=-18dB:ratio=2.5:attack=15:release=180,loudnorm=I=-16:TP=-1.5:LRA=8" \
+            -ar 44100 -ac 1 -c:a libmp3lame -b:a 192k \
+            saida_teste_feminino/TESTE_VOZ_FEMININA_FRANCISCA.mp3
+
+          ffprobe -v error \
+            -show_entries format=duration:stream=codec_name,sample_rate,channels,bit_rate \
+            -of default=noprint_wrappers=1 \
+            saida_teste_feminino/TESTE_VOZ_FEMININA_FRANCISCA.mp3 \
+            > saida_teste_feminino/VALIDACAO.txt
+
+          sha256sum saida_teste_feminino/TESTE_VOZ_FEMININA_FRANCISCA.mp3 \
+            > saida_teste_feminino/SHA256SUMS.txt
+
+      - name: Montar ZIP
+        run: |
+          cd saida_teste_feminino
+          zip -9 -r ../TESTE_VOZ_FEMININA_FRANCISCA.zip .
+          cd ..
+          unzip -t TESTE_VOZ_FEMININA_FRANCISCA.zip
+
+      - name: Publicar artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: teste-voz-feminina-francisca
+          path: |
+            TESTE_VOZ_FEMININA_FRANCISCA.zip
+            saida_teste_feminino/TESTE_VOZ_FEMININA_FRANCISCA.mp3
+            saida_teste_feminino/VOZ_FEMININA_TESTE.srt
+            saida_teste_feminino/texto_teste.txt
+            saida_teste_feminino/VALIDACAO.txt
+          if-no-files-found: error
+          retention-days: 7
