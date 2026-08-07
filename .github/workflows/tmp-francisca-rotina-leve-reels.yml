@@ -1,0 +1,129 @@
+name: TEMP - Voz Francisca Rotina Leve Reels
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  gerar-narracao:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Baixar código
+        uses: actions/checkout@v4
+
+      - name: Preparar Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar dependências
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg zip
+          python -m pip install --upgrade pip
+          python -m pip install edge-tts
+
+      - name: Gerar voz feminina Francisca
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          OUT="ROTINA_LEVE_REELS_NARRACAO_V1"
+          mkdir -p "$OUT"
+
+          cat > "$OUT/ROTEIRO_NARRACAO.txt" <<'TEXTO'
+          Você chega no fim do dia com muita fome e pensa que faltou controle?
+
+          Calma. Muitas vezes, o problema não está na sua força de vontade, mas em uma rotina que não te sustentou ao longo do dia.
+
+          Quando você passa muitas horas sem comer e improvisa o lanche da tarde, é comum chegar à noite querendo compensar tudo de uma vez.
+
+          Uma escolha simples pode fazer diferença: combinar proteína, fibra e praticidade.
+
+          Pode ser iogurte com fruta, queijo com maçã ou ovo cozido com tomate.
+
+          Não precisa ser perfeito. Nem radical. Precisa ser possível e caber na sua vida.
+
+          Quer sair desse ciclo e organizar uma rotina alimentar mais leve e realista?
+
+          Responda a este reel com a palavra QUERO.
+
+          E eu te explico como funciona.
+          TEXTO
+
+          edge-tts \
+            --voice pt-BR-FranciscaNeural \
+            --rate=-3% \
+            --pitch=+0Hz \
+            --file "$OUT/ROTEIRO_NARRACAO.txt" \
+            --write-media "$OUT/NARRACAO_FEMININA_BRUTA.mp3" \
+            --write-subtitles "$OUT/LEGENDAS_NARRACAO.srt"
+
+          ffmpeg -y -hide_banner -loglevel warning \
+            -i "$OUT/NARRACAO_FEMININA_BRUTA.mp3" \
+            -af "highpass=f=65,lowpass=f=13000,acompressor=threshold=-18dB:ratio=2.5:attack=15:release=180,loudnorm=I=-16:TP=-1.5:LRA=8" \
+            -ar 44100 \
+            -ac 1 \
+            -c:a libmp3lame \
+            -b:a 192k \
+            "$OUT/NARRACAO_FEMININA_FRANCISCA_FINAL.mp3"
+
+          ffprobe -v error \
+            -show_entries format=duration,size,bit_rate:stream=codec_name,sample_rate,channels,bit_rate \
+            -of default=noprint_wrappers=1 \
+            "$OUT/NARRACAO_FEMININA_FRANCISCA_FINAL.mp3" \
+            > "$OUT/VALIDACAO_FFPROBE.txt"
+
+          ffmpeg -hide_banner -nostats \
+            -i "$OUT/NARRACAO_FEMININA_FRANCISCA_FINAL.mp3" \
+            -filter_complex "ebur128=peak=true" \
+            -f null - \
+            2> "$OUT/MEDICAO_LOUDNESS.txt"
+
+          sha256sum \
+            "$OUT/NARRACAO_FEMININA_FRANCISCA_FINAL.mp3" \
+            "$OUT/NARRACAO_FEMININA_BRUTA.mp3" \
+            "$OUT/LEGENDAS_NARRACAO.srt" \
+            > "$OUT/SHA256SUMS.txt"
+
+          cat > "$OUT/RELATORIO_TECNICO.md" <<'RELATORIO'
+          # Relatório técnico — Narração Rotina Leve Reels V1
+
+          - Motor: Edge TTS
+          - Voz: pt-BR-FranciscaNeural
+          - Velocidade: -3%
+          - Tom: +0 Hz
+          - Tratamento: highpass 65 Hz; lowpass 13 kHz; compressor moderado; loudnorm -16 LUFS, -1,5 dBTP, LRA 8
+          - Saída: MP3 mono, 44.100 Hz, 192 kbps
+          - Legendas: SRT gerado pelo Edge TTS
+          - Uso: narração para Reels vertical Rotina Leve
+          RELATORIO
+
+          (
+            cd "$OUT"
+            zip -9 -r "../ROTINA_LEVE_REELS_NARRACAO_FRANCISCA_V1.zip" .
+          )
+
+          unzip -t "ROTINA_LEVE_REELS_NARRACAO_FRANCISCA_V1.zip" \
+            > "$OUT/VALIDACAO_ZIP.txt"
+
+          cat "$OUT/VALIDACAO_FFPROBE.txt"
+          tail -n 20 "$OUT/MEDICAO_LOUDNESS.txt"
+          cat "$OUT/VALIDACAO_ZIP.txt"
+
+      - name: Publicar artefato temporário
+        uses: actions/upload-artifact@v4
+        with:
+          name: rotina-leve-reels-narracao-francisca-v1
+          path: |
+            ROTINA_LEVE_REELS_NARRACAO_FRANCISCA_V1.zip
+            ROTINA_LEVE_REELS_NARRACAO_V1/NARRACAO_FEMININA_FRANCISCA_FINAL.mp3
+            ROTINA_LEVE_REELS_NARRACAO_V1/LEGENDAS_NARRACAO.srt
+            ROTINA_LEVE_REELS_NARRACAO_V1/VALIDACAO_FFPROBE.txt
+            ROTINA_LEVE_REELS_NARRACAO_V1/SHA256SUMS.txt
+            ROTINA_LEVE_REELS_NARRACAO_V1/RELATORIO_TECNICO.md
+          if-no-files-found: error
+          retention-days: 2
