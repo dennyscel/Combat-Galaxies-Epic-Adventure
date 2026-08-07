@@ -1,0 +1,81 @@
+name: Gerar narracao Piper
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  gerar-audio:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Baixar codigo
+        uses: actions/checkout@v4
+
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Instalar dependencias
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg bzip2 zip
+          python -m pip install --upgrade pip
+          python -m pip install piper-tts==1.6.0 sherpa-onnx soundfile numpy
+
+      - name: Baixar modelos brasileiros
+        run: |
+          set -euxo pipefail
+          mkdir -p piper_tts_leilao/modelos
+          cd piper_tts_leilao/modelos
+          curl -fL --retry 5 --retry-delay 3 -o faber.tar.bz2 https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-pt_BR-faber-medium.tar.bz2
+          curl -fL --retry 5 --retry-delay 3 -o miro.tar.bz2 https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-pt_BR-miro-high.tar.bz2
+          curl -fL --retry 5 --retry-delay 3 -o dii.tar.bz2 https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-pt_BR-dii-high.tar.bz2
+          tar -xjf faber.tar.bz2
+          tar -xjf miro.tar.bz2
+          tar -xjf dii.tar.bz2
+          rm -f *.tar.bz2
+          find . -maxdepth 2 -type f | sort
+
+      - name: Gerar MP3 WAV e SRT
+        run: |
+          python piper_tts_leilao/gerar_piper_sherpa.py
+
+      - name: Montar pacote final
+        run: |
+          cp piper_tts_leilao/narracao_corrigida.txt piper_tts_leilao/saida/
+          cp piper_tts_leilao/gerar_piper_sherpa.py piper_tts_leilao/saida/
+          cp piper_tts_leilao/GERAR_OFFLINE_PIPER.bat piper_tts_leilao/saida/
+          cat > piper_tts_leilao/saida/LEIA-ME.txt <<'EOF'
+          NARRACAO OFFLINE - 18 LEILAO CLASSICOS DOS GAMES
+
+          Foram geradas tres vozes brasileiras em 22.050 Hz:
+          FABER: diccao mais limpa, recomendada.
+          MIRO: timbre mais grave e pausado.
+          DII: timbre mais suave.
+
+          O pacote contem MP3, WAV tratado, WAV sem tratamento, SRT,
+          texto corrigido, gerador Python, BAT e relatorios tecnicos.
+
+          Tratamento: filtro grave leve, compressor e normalizacao em -16 LUFS.
+          EOF
+          cd piper_tts_leilao/saida
+          zip -9 -r ../../PACOTE_NARRACAO_PIPER_18_LEILAO.zip .
+          cd ../..
+          ls -lh PACOTE_NARRACAO_PIPER_18_LEILAO.zip piper_tts_leilao/saida/*
+
+      - name: Publicar artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: narracao-piper-18-leilao
+          path: |
+            PACOTE_NARRACAO_PIPER_18_LEILAO.zip
+            piper_tts_leilao/saida/*.mp3
+            piper_tts_leilao/saida/RELATORIO.md
+            piper_tts_leilao/saida/RELATORIO_TECNICO.json
+          if-no-files-found: error
+          retention-days: 7
