@@ -1,0 +1,136 @@
+name: TEMP - Voz Francisca Reel Fix
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  gerar-narracao:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Baixar código
+        uses: actions/checkout@v4
+
+      - name: Preparar Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar dependências
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg zip
+          python -m pip install --upgrade pip
+          python -m pip install edge-tts
+
+      - name: Gerar voz feminina Francisca corrigindo reel
+        run: |
+          mkdir -p saida_rotina_leve_reel_fix
+
+          cat > saida_rotina_leve_reel_fix/ROTEIRO_OFICIAL.txt <<'TEXTO'
+          Você chega no fim do dia com muita fome e pensa que faltou controle?
+
+          Calma. Muitas vezes, o problema não está na sua força de vontade, mas em uma rotina que não te sustentou ao longo do dia.
+
+          Quando você passa muitas horas sem comer e improvisa o lanche da tarde, é comum chegar à noite querendo compensar tudo de uma vez.
+
+          Uma escolha simples pode fazer diferença: combinar proteína, fibra e praticidade.
+
+          Pode ser iogurte com fruta, queijo com maçã ou ovo cozido com tomate.
+
+          Não precisa ser perfeito. Nem radical. Precisa ser possível e caber na sua vida.
+
+          Quer sair desse ciclo e organizar uma rotina alimentar mais leve e realista?
+
+          Responda a este reel com a palavra QUERO.
+
+          E eu te explico como funciona.
+          TEXTO
+
+          cat > saida_rotina_leve_reel_fix/ROTEIRO_TTS.txt <<'TEXTO'
+          Você chega no fim do dia com muita fome e pensa que faltou controle?
+
+          Calma. Muitas vezes, o problema não está na sua força de vontade, mas em uma rotina que não te sustentou ao longo do dia.
+
+          Quando você passa muitas horas sem comer e improvisa o lanche da tarde, é comum chegar à noite querendo compensar tudo de uma vez.
+
+          Uma escolha simples pode fazer diferença: combinar proteína, fibra e praticidade.
+
+          Pode ser iogurte com fruta, queijo com maçã ou ovo cozido com tomate.
+
+          Não precisa ser perfeito. Nem radical. Precisa ser possível e caber na sua vida.
+
+          Quer sair desse ciclo e organizar uma rotina alimentar mais leve e realista?
+
+          Responda a este ril com a palavra QUERO.
+
+          E eu te explico como funciona.
+          TEXTO
+
+          edge-tts \
+            --voice pt-BR-FranciscaNeural \
+            --rate=-3% \
+            --pitch=+0Hz \
+            --file saida_rotina_leve_reel_fix/ROTEIRO_TTS.txt \
+            --write-media saida_rotina_leve_reel_fix/NARRACAO_BRUTA.mp3 \
+            --write-subtitles saida_rotina_leve_reel_fix/LEGENDAS_TTS.srt
+
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('saida_rotina_leve_reel_fix/LEGENDAS_TTS.srt')
+          s = p.read_text(encoding='utf-8')
+          s = s.replace(' este ril ', ' este reel ')
+          s = s.replace(' este ril\n', ' este reel\n')
+          Path('saida_rotina_leve_reel_fix/LEGENDAS_OFICIAIS.srt').write_text(s, encoding='utf-8')
+          PY
+
+          ffmpeg -y -hide_banner -loglevel warning \
+            -i saida_rotina_leve_reel_fix/NARRACAO_BRUTA.mp3 \
+            -af "highpass=f=65,lowpass=f=13000,acompressor=threshold=-18dB:ratio=2.5:attack=15:release=180,loudnorm=I=-16:TP=-1.5:LRA=8" \
+            -ar 44100 -ac 1 -c:a libmp3lame -b:a 192k \
+            saida_rotina_leve_reel_fix/ROTINA_LEVE_REELS_NARRACAO_FRANCISCA_V2_REEL_CORRIGIDO.mp3
+
+          ffprobe -v error \
+            -show_entries format=duration:stream=codec_name,sample_rate,channels,bit_rate \
+            -of default=noprint_wrappers=1 \
+            saida_rotina_leve_reel_fix/ROTINA_LEVE_REELS_NARRACAO_FRANCISCA_V2_REEL_CORRIGIDO.mp3 \
+            > saida_rotina_leve_reel_fix/VALIDACAO.txt
+
+          ffmpeg -hide_banner -nostats \
+            -i saida_rotina_leve_reel_fix/ROTINA_LEVE_REELS_NARRACAO_FRANCISCA_V2_REEL_CORRIGIDO.mp3 \
+            -af ebur128=peak=true -f null - \
+            2> saida_rotina_leve_reel_fix/LOUDNESS.txt || true
+
+          sha256sum saida_rotina_leve_reel_fix/ROTINA_LEVE_REELS_NARRACAO_FRANCISCA_V2_REEL_CORRIGIDO.mp3 \
+            > saida_rotina_leve_reel_fix/SHA256SUMS.txt
+
+          cat > saida_rotina_leve_reel_fix/LEIA-ME.txt <<'TXT'
+          Motor: Edge TTS
+          Voz: pt-BR-FranciscaNeural
+          Velocidade: -3%
+          Tom: +0 Hz
+          Correção fonética interna: "reel" -> "ril" somente no ROTEIRO_TTS.
+          Texto oficial e SRT permanecem com a grafia correta: "reel".
+          Saída final: MP3 mono, 44.100 Hz, 192 kbps.
+          TXT
+
+          cd saida_rotina_leve_reel_fix
+          zip -9 -r ../ROTINA_LEVE_REELS_FRANCISCA_V2_REEL_CORRIGIDO.zip .
+          cd ..
+          unzip -t ROTINA_LEVE_REELS_FRANCISCA_V2_REEL_CORRIGIDO.zip
+
+      - name: Publicar artefato temporário
+        uses: actions/upload-artifact@v4
+        with:
+          name: rotina-leve-francisca-v2-reel-corrigido
+          path: |
+            ROTINA_LEVE_REELS_FRANCISCA_V2_REEL_CORRIGIDO.zip
+            saida_rotina_leve_reel_fix/ROTINA_LEVE_REELS_NARRACAO_FRANCISCA_V2_REEL_CORRIGIDO.mp3
+            saida_rotina_leve_reel_fix/LEGENDAS_OFICIAIS.srt
+            saida_rotina_leve_reel_fix/VALIDACAO.txt
+            saida_rotina_leve_reel_fix/LOUDNESS.txt
+            saida_rotina_leve_reel_fix/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 2
