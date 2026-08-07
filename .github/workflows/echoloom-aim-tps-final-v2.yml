@@ -1,0 +1,140 @@
+name: ECHOLOOM TPS Aim Final Package V2
+
+on:
+  push:
+    branches:
+      - echoloom-aim-tps-ci-20260802
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  verify-and-package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      CI: "true"
+      ECHOLOOM_CHROMIUM_PATH: /usr/bin/google-chrome
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout isolated CI branch
+        uses: actions/checkout@v4
+
+      - name: Recover previously approved source
+        shell: bash
+        run: |
+          set -euxo pipefail
+          gh run download 30727540513 \
+            --repo "$GITHUB_REPOSITORY" \
+            --name echoloom-hostinger-final \
+            --dir prior-approved
+          SOURCE_ZIP="prior-approved/release/ECHOLOOM-CIDADE-DA-RUPTURA-CODIGO-FONTE-RC1-PASSADA-1.zip"
+          test -f "$SOURCE_ZIP"
+          echo "392bff5559ef3eed8132fd51e602ecf35169051ef295c68ad8eb2f0d4f65451d  $SOURCE_ZIP" | sha256sum --check --strict
+          mkdir project
+          unzip -q "$SOURCE_ZIP" -d project
+          test -f project/app/GameExperience.tsx
+          test -f project/tests/release-critical-runtime-contracts.test.mjs
+
+      - name: Apply TPS camera and aiming revision
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cat ci/aim-tps.patch.part-00 ci/aim-tps.patch.part-01 ci/aim-tps.patch.part-02 ci/aim-tps.patch.part-03 > /tmp/aim-tps.patch
+          echo "fb693fe73d37ca4df5df9bd22dbc28a3cf60672554ddcc77018313b97a5b1499  /tmp/aim-tps.patch" | sha256sum --check --strict
+          echo "6e93d4230b020703f1e44db029b3ac8c1a11ed637793264573bf6333bdad6ef8  ci/aim-tps-followup.patch" | sha256sum --check --strict
+          echo "bbe24aafb783cb8c6dcf28d6a0b80ffaf79ce3a5c96fe7e98e16ccc4a12768ab  ci/aim-tps-shoulder.patch" | sha256sum --check --strict
+          echo "567e630d345edb51caec8445c21395d73000dea91f4445537233dd43c5ce538b  ci/aim-tps-screen-test.patch" | sha256sum --check --strict
+          echo "90f7383e9f87b1284918999b5a0b8462b8d94749c2275eccd33a61d4200ba1c1  ci/aim-tps-raycaster-camera.patch" | sha256sum --check --strict
+          cd project
+          patch --batch --forward -p1 < /tmp/aim-tps.patch
+          patch --batch --forward -p1 < ../ci/aim-tps-followup.patch
+          patch --batch --forward -p1 < ../ci/aim-tps-shoulder.patch
+          patch --batch --forward -p1 < ../ci/aim-tps-screen-test.patch
+          patch --batch --forward -p1 < ../ci/aim-tps-raycaster-camera.patch
+          rm -f app/GameExperience.tsx.orig scripts/public-browser-smoke.mjs.orig scripts/browser-smoke.mjs.orig
+          grep -n '0.22.1-marco18.aim1' package.json package-lock.json public/LEIA-ME-HOSTINGER.txt
+          grep -n 'raycastAimPoint\|isCameraAiming\|rotateAim\|gameplayViewDirection\|shoulderOffset\|playerScreen\|aimRaycaster.camera' app/GameExperience.tsx
+          node --check scripts/browser-smoke.mjs
+          node --check tests/release-critical-regressions.test.mjs
+          sha256sum app/GameExperience.tsx package.json package-lock.json scripts/browser-smoke.mjs tests/release-critical-regressions.test.mjs > ../TPS-AIM-SOURCE-HASHES.log
+
+      - name: Setup Node 22.13.1
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.1
+          cache: npm
+          cache-dependency-path: project/package-lock.json
+
+      - name: Pin npm and record environment
+        shell: bash
+        run: |
+          npm install --global npm@11.9.0
+          {
+            uname -a
+            node --version
+            npm --version
+            google-chrome --version || true
+            cat TPS-AIM-SOURCE-HASHES.log
+          } | tee ENVIRONMENT-TPS-AIM-FINAL.log
+
+      - name: Clean npm ci
+        working-directory: project
+        shell: bash
+        run: |
+          set -o pipefail
+          npm ci 2>&1 | tee ../NPM-CI-TPS-AIM-FINAL.log
+
+      - name: Full release verification
+        working-directory: project
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run verify 2>&1 | tee ../VERIFY-TPS-AIM-FINAL.log
+
+      - name: Package exact tested source
+        working-directory: project
+        run: npm run package:source
+
+      - name: Build final delivery
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p delivery
+          cp project/release/ECHOLOOM-CIDADE-DA-RUPTURA-MINHA-VERSAO-HOSTINGER-RC1-PASSADA-1.zip \
+            delivery/ECHOLOOM-CIDADE-DA-RUPTURA-HOSTINGER-MIRA-TPS-FINAL.zip
+          cp project/release/ECHOLOOM-CIDADE-DA-RUPTURA-CODIGO-FONTE-RC1-PASSADA-1.zip \
+            delivery/ECHOLOOM-CIDADE-DA-RUPTURA-CODIGO-FONTE-MIRA-TPS-FINAL.zip
+          cp ENVIRONMENT-TPS-AIM-FINAL.log NPM-CI-TPS-AIM-FINAL.log VERIFY-TPS-AIM-FINAL.log TPS-AIM-SOURCE-HASHES.log delivery/
+          cat > delivery/RELATORIO-MIRA-TPS-FINAL.txt <<'EOF'
+          ECHOLOOM — CIDADE DA RUPTURA
+          Revisão de mira TPS 0.22.1-marco18.aim1
+
+          Correções verificadas:
+          - câmera over-the-shoulder com KAI-R projetado fora do centro da mira;
+          - mouse altera yaw e pitch da direção real da câmera;
+          - corpo acompanha o yaw da câmera em modo de mira;
+          - raio da câmera resolve o ponto sob a mira;
+          - projétil visual sai da mão do personagem em direção ao ponto da mira;
+          - segundo raio impede atravessar obstáculo junto ao personagem;
+          - efeitos e projéteis do pool não desviam o raio de mira;
+          - raycaster vinculado à câmera para compatibilidade com Sprites;
+          - WebGPU, WebGL2, campanha, saves, checkpoints e ZIP público testados.
+          EOF
+          find delivery -maxdepth 1 -type f ! -name SHA256SUMS-MIRA-TPS-FINAL.txt -print0 | sort -z | xargs -0 sha256sum > delivery/SHA256SUMS-MIRA-TPS-FINAL.txt
+          unzip -l delivery/ECHOLOOM-CIDADE-DA-RUPTURA-HOSTINGER-MIRA-TPS-FINAL.zip | tee delivery/CONTEUDO-ZIP-HOSTINGER.log
+          unzip -p delivery/ECHOLOOM-CIDADE-DA-RUPTURA-HOSTINGER-MIRA-TPS-FINAL.zip index.html >/dev/null
+
+      - name: Upload approved TPS aiming package
+        uses: actions/upload-artifact@v4
+        with:
+          name: echoloom-aim-tps-hostinger-final-v2
+          path: delivery
+          if-no-files-found: error
+          retention-days: 7

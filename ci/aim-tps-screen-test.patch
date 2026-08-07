@@ -1,0 +1,41 @@
+--- a/app/GameExperience.tsx
++++ b/app/GameExperience.tsx
+@@ -9053,8 +9053,12 @@
+         return Array.isArray(material) ? material.map((entry) => entry.uuid) : [material.uuid];
+       }))),
+     });
++    this.camera.updateMatrixWorld();
+     const cameraPosition = this.camera.getWorldPosition(new THREE.Vector3());
+     const cameraDirection = this.camera.getWorldDirection(new THREE.Vector3()).normalize();
++    const playerScreen = this.player.position.clone()
++      .add(new THREE.Vector3(0, 1.45, 0))
++      .project(this.camera);
+     return {
+       stage: this.stage.id,
+       backend: (this.renderer as { isWebGPURenderer?: boolean } | null)?.isWebGPURenderer ? "WEBGPU" : this.renderer ? "WEBGL 2" : "NONE",
+@@ -9091,6 +9095,7 @@
+         cameraPosition: cameraPosition.toArray(),
+         cameraDirection: cameraDirection.toArray(),
+         playerPosition: this.player.position.toArray(),
++        playerScreen: playerScreen.toArray(),
+         shotDirection: this.aimDirection.toArray(),
+       },
+       scene: {
+--- a/scripts/browser-smoke.mjs
++++ b/scripts/browser-smoke.mjs
+@@ -98,11 +98,11 @@
+     await delay(450);
+     const aimAfter = await page.evaluate(() => window.__ECHOLOOM_QA__.snapshot().aim);
+     assert.notDeepEqual(aimAfter.cameraDirection, aimBefore.cameraDirection, `${mode}: mouse/toque não alterou a direção da câmera`);
+-    const toPlayer = aimAfter.playerPosition.map((value, index) => value + (index === 1 ? 1.45 : 0) - aimAfter.cameraPosition[index]);
+-    const toPlayerLength = Math.hypot(...toPlayer);
+-    const cameraLength = Math.hypot(...aimAfter.cameraDirection);
+-    const bodyDot = toPlayer.reduce((sum, value, index) => sum + value * aimAfter.cameraDirection[index], 0) / Math.max(1e-6, toPlayerLength * cameraLength);
+-    assert.ok(bodyDot < 0.97, `${mode}: centro da mira continua preso ao corpo (${bodyDot})`);
++    const [playerScreenX, playerScreenY, playerScreenDepth] = aimAfter.playerScreen;
++    const screenSeparation = Math.hypot(playerScreenX, playerScreenY);
++    assert.ok(Number.isFinite(playerScreenDepth) && playerScreenDepth > -1 && playerScreenDepth < 1, `${mode}: KAI-R saiu do volume visível da câmera (${aimAfter.playerScreen})`);
++    assert.ok(Math.abs(playerScreenX) > 0.08, `${mode}: KAI-R ainda cobre horizontalmente a mira central (x=${playerScreenX}, y=${playerScreenY})`);
++    assert.ok(screenSeparation > 0.1, `${mode}: separação visual entre KAI-R e a mira é insuficiente (${screenSeparation})`);
+     const yawDelta = Math.atan2(Math.sin(aimAfter.yaw - aimAfter.playerYaw), Math.cos(aimAfter.yaw - aimAfter.playerYaw));
+     assert.ok(Math.abs(yawDelta) < 0.22, `${mode}: corpo não acompanhou o yaw da câmera (${yawDelta})`);

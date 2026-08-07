@@ -1,0 +1,12 @@
+--- a/app/GameExperience.tsx
++++ b/app/GameExperience.tsx
+@@ -8156,6 +8156,9 @@
+   private raycastAimPoint(origin: THREE.Vector3, direction: THREE.Vector3, far = 140) {
+     this.aimRaycaster.near = 0.08;
+     this.aimRaycaster.far = far;
++    // Recursive world queries can encounter Sprites (sun, HUD markers).
++    // Raycaster.set() does not assign a camera, while Sprite.raycast requires it.
++    this.aimRaycaster.camera = this.camera;
+     this.aimRaycaster.set(origin, direction);
+     const intersections = this.aimRaycaster.intersectObject(this.world, true);
+     const hit = intersections.find((intersection) => !this.isAimRayIgnored(intersection.object));
