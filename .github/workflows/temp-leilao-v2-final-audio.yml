@@ -1,0 +1,163 @@
+name: TEMP - Leilao V2 Final Audio
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  gerar-audio-v2:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Dependencias
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg bzip2 curl zip
+          python -m pip install --upgrade pip
+          python -m pip install piper-tts==1.6.0 sherpa-onnx soundfile numpy
+
+      - name: Baixar Faber Medium
+        run: |
+          set -euxo pipefail
+          mkdir -p temp_leilao_v2/modelos
+          cd temp_leilao_v2/modelos
+          curl -fL --retry 5 --retry-delay 3 \
+            -o faber.tar.bz2 \
+            https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-pt_BR-faber-medium.tar.bz2
+          tar -xjf faber.tar.bz2
+          rm -f faber.tar.bz2
+          test -f vits-piper-pt_BR-faber-medium/pt_BR-faber-medium.onnx
+          test -f vits-piper-pt_BR-faber-medium/tokens.txt
+
+      - name: Verificar fonemas nasais
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('temp_leilao_v2/modelos/vits-piper-pt_BR-faber-medium/tokens.txt')
+          txt=p.read_text(encoding='utf-8', errors='ignore')
+          assert '\u0303' in txt, 'MODELO SEM TIL COMBINANTE U+0303 - NAO USAR'
+          print('Modelo aprovado: U+0303 presente no vocabulario.')
+          PY
+
+      - name: Gerar narracoes segmentadas e manifesto
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json, wave
+          import numpy as np
+          import soundfile as sf
+          import sherpa_onnx
+
+          base=Path('temp_leilao_v2')
+          model_dir=base/'modelos'/'vits-piper-pt_BR-faber-medium'
+          out=base/'saida'; out.mkdir(parents=True,exist_ok=True)
+
+          config=sherpa_onnx.OfflineTtsConfig(
+              model=sherpa_onnx.OfflineTtsModelConfig(
+                  vits=sherpa_onnx.OfflineTtsVitsModelConfig(
+                      model=str(model_dir/'pt_BR-faber-medium.onnx'),
+                      tokens=str(model_dir/'tokens.txt'),
+                      data_dir=str(model_dir/'espeak-ng-data'),
+                  ),
+                  num_threads=2,
+                  debug=False,
+                  provider='cpu',
+              ),
+              max_num_sentences=1,
+          )
+          if not config.validate():
+              raise RuntimeError('Configuracao Faber invalida')
+          tts=sherpa_onnx.OfflineTts(config)
+          PAUSA=0.35
+
+          def gerar(nome):
+              linhas=[x.strip() for x in (base/f'{nome}_FALA.txt').read_text(encoding='utf-8').splitlines() if x.strip()]
+              all_samples=[]; manifest=[]; cur=0.0; sr=None
+              for idx,texto in enumerate(linhas,1):
+                  audio=tts.generate(text=texto,sid=0,speed=1.06)
+                  samples=np.asarray(audio.samples,dtype=np.float32).reshape(-1)
+                  sr=int(audio.sample_rate)
+                  dur=len(samples)/sr
+                  ini=cur; fim=cur+dur
+                  manifest.append({'index':idx,'start':round(ini,6),'end':round(fim,6),'duration':round(dur,6),'pause_after':PAUSA,'text':texto})
+                  all_samples.append(samples)
+                  cur=fim
+                  if idx != len(linhas):
+                      silence=np.zeros(int(sr*PAUSA),dtype=np.float32)
+                      all_samples.append(silence)
+                      cur += len(silence)/sr
+              merged=np.concatenate(all_samples)
+              sf.write(out/f'{nome}_RAW_MONO.wav',merged,sr,subtype='PCM_16')
+              (out/f'{nome}_MANIFEST.json').write_text(json.dumps({'sample_rate':sr,'pause':PAUSA,'total_duration':len(merged)/sr,'segments':manifest},ensure_ascii=False,indent=2),encoding='utf-8')
+              print(nome,'segmentos=',len(linhas),'duracao=',len(merged)/sr,'sr=',sr)
+
+          gerar('VIDEO10')
+          gerar('VIDEO5')
+          PY
+
+      - name: Tratar voz e criar masters
+        run: |
+          set -euxo pipefail
+          mkdir -p temp_leilao_v2/saida/final
+          for N in VIDEO10 VIDEO5; do
+            ffmpeg -y -hide_banner -loglevel warning \
+              -i temp_leilao_v2/saida/${N}_RAW_MONO.wav \
+              -af "highpass=f=75,lowpass=f=13000,acompressor=threshold=-18dB:ratio=3:attack=8:release=180,loudnorm=I=-14:TP=-1.5:LRA=11" \
+              -ar 48000 -ac 1 -c:a pcm_s16le \
+              temp_leilao_v2/saida/final/${N}_FABI_V2_MONO_48000.wav
+
+            ffmpeg -y -hide_banner -loglevel warning \
+              -i temp_leilao_v2/saida/final/${N}_FABI_V2_MONO_48000.wav \
+              -af "pan=stereo|c0=c0|c1=c0" \
+              -ar 48000 -ac 2 -c:a libmp3lame -b:a 192k \
+              temp_leilao_v2/saida/final/${N}_FABER_V2_STEREO_48000.mp3
+
+            ffprobe -v error -show_entries format=duration:stream=codec_name,sample_rate,channels,channel_layout -of json \
+              temp_leilao_v2/saida/final/${N}_FABER_V2_STEREO_48000.mp3 \
+              > temp_leilao_v2/saida/final/${N}_FFPROBE.json
+            ffmpeg -hide_banner -nostats -i temp_leilao_v2/saida/final/${N}_FABER_V2_STEREO_48000.mp3 \
+              -af ebur128=peak=true -f null - 2> temp_leilao_v2/saida/final/${N}_LOUDNESS.txt || true
+          done
+
+      - name: Teste de diccao critico
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import numpy as np, soundfile as sf, sherpa_onnx
+          base=Path('temp_leilao_v2'); model_dir=base/'modelos'/'vits-piper-pt_BR-faber-medium'; out=base/'saida/final'
+          cfg=sherpa_onnx.OfflineTtsConfig(model=sherpa_onnx.OfflineTtsModelConfig(vits=sherpa_onnx.OfflineTtsVitsModelConfig(model=str(model_dir/'pt_BR-faber-medium.onnx'),tokens=str(model_dir/'tokens.txt'),data_dir=str(model_dir/'espeak-ng-data')),num_threads=2,provider='cpu'),max_num_sentences=1)
+          tts=sherpa_onnx.OfflineTts(cfg)
+          frases=['Atari dois mil e seiscentos.','Máster Sístem.','Méga Draive.','Súper Nintendo.','Plêi Stêixon três.','Uí Iú.','Dáctar.','Clássicos dos Guêimes.']
+          blocks=[]; sr=None
+          for t in frases:
+              a=tts.generate(text=t,sid=0,speed=1.06); sr=int(a.sample_rate); blocks.append(np.asarray(a.samples,dtype=np.float32)); blocks.append(np.zeros(int(sr*0.7),dtype=np.float32))
+          sf.write(out/'TESTE_DICCAO_V2.wav',np.concatenate(blocks),sr,subtype='PCM_16')
+          PY
+          ffmpeg -y -hide_banner -loglevel warning -i temp_leilao_v2/saida/final/TESTE_DICCAO_V2.wav -ar 48000 -ac 2 -c:a libmp3lame -b:a 192k temp_leilao_v2/saida/final/TESTE_DICCAO_V2.mp3
+
+      - name: Hashes e pacote
+        run: |
+          cp temp_leilao_v2/VIDEO10_FALA.txt temp_leilao_v2/saida/final/
+          cp temp_leilao_v2/VIDEO5_FALA.txt temp_leilao_v2/saida/final/
+          cp temp_leilao_v2/saida/VIDEO10_MANIFEST.json temp_leilao_v2/saida/final/
+          cp temp_leilao_v2/saida/VIDEO5_MANIFEST.json temp_leilao_v2/saida/final/
+          cd temp_leilao_v2/saida/final
+          sha256sum * > SHA256SUMS.txt
+          zip -9 NARRACOES_V2_FINAL.zip VIDEO10_FABI_V2_MONO_48000.wav VIDEO5_FABI_V2_MONO_48000.wav VIDEO10_FABER_V2_STEREO_48000.mp3 VIDEO5_FABER_V2_STEREO_48000.mp3 VIDEO10_MANIFEST.json VIDEO5_MANIFEST.json VIDEO10_FALA.txt VIDEO5_FALA.txt TESTE_DICCAO_V2.mp3 VIDEO10_FFPROBE.json VIDEO5_FFPROBE.json VIDEO10_LOUDNESS.txt VIDEO5_LOUDNESS.txt SHA256SUMS.txt
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: narracoes-leilao-v2-final
+          path: temp_leilao_v2/saida/final/
+          if-no-files-found: error
+          retention-days: 2
