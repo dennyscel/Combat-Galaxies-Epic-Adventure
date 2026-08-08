@@ -1,0 +1,122 @@
+name: TEMP - Teste Faber Stereo
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  gerar-teste:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Baixar codigo
+        uses: actions/checkout@v4
+
+      - name: Preparar Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar dependencias
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg bzip2 curl
+          python -m pip install --upgrade pip
+          python -m pip install piper-tts==1.6.0 sherpa-onnx soundfile numpy
+
+      - name: Baixar Faber Medium pt-BR
+        run: |
+          set -euxo pipefail
+          mkdir -p teste_faber/modelos
+          cd teste_faber/modelos
+          curl -fL --retry 5 --retry-delay 3 \
+            -o faber.tar.bz2 \
+            https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-pt_BR-faber-medium.tar.bz2
+          tar -xjf faber.tar.bz2
+          rm -f faber.tar.bz2
+          find . -maxdepth 2 -type f | sort
+
+      - name: Sintetizar teste neural
+        run: |
+          mkdir -p teste_faber/saida
+          python - <<'PY'
+          from pathlib import Path
+          import numpy as np
+          import sherpa_onnx
+          import soundfile as sf
+
+          base = Path('teste_faber')
+          model_dir = base / 'modelos' / 'vits-piper-pt_BR-faber-medium'
+
+          config = sherpa_onnx.OfflineTtsConfig(
+              model=sherpa_onnx.OfflineTtsModelConfig(
+                  vits=sherpa_onnx.OfflineTtsVitsModelConfig(
+                      model=str(model_dir / 'pt_BR-faber-medium.onnx'),
+                      tokens=str(model_dir / 'tokens.txt'),
+                      data_dir=str(model_dir / 'espeak-ng-data'),
+                  ),
+                  num_threads=2,
+                  debug=False,
+                  provider='cpu',
+              ),
+              max_num_sentences=1,
+          )
+
+          if not config.validate():
+              raise RuntimeError('Configuracao invalida para Faber Medium')
+
+          tts = sherpa_onnx.OfflineTts(config)
+          texto = (
+              'Dos primeiros pixels às gerações modernas, clássicos não envelhecem. '
+              'Eles fazem história. Décimo oitavo Leilão Clássicos dos Games, '
+              'dia dez de agosto, às dezenove horas e trinta minutos, ao vivo.'
+          )
+          audio = tts.generate(text=texto, sid=0, speed=1.08)
+          samples = np.asarray(audio.samples, dtype=np.float32).reshape(-1)
+          sf.write(base / 'saida' / 'TESTE_FABER_RAW.wav', samples, int(audio.sample_rate), subtype='PCM_16')
+          (base / 'saida' / 'TEXTO_TESTE.txt').write_text(texto + '\n', encoding='utf-8')
+          print('sample_rate_modelo=', int(audio.sample_rate))
+          print('amostras=', len(samples))
+          print('duracao=', len(samples) / int(audio.sample_rate))
+          PY
+
+      - name: Tratar e converter para stereo
+        run: |
+          ffmpeg -y -hide_banner -loglevel warning \
+            -i teste_faber/saida/TESTE_FABER_RAW.wav \
+            -af "aresample=44100,highpass=f=70,lowpass=f=12500,acompressor=threshold=-18dB:ratio=2.2:attack=15:release=180,loudnorm=I=-16:TP=-1.5:LRA=8" \
+            -ar 44100 -ac 2 -c:a libmp3lame -b:a 192k \
+            teste_faber/saida/TESTE_FABER_NEURAL_STEREO.mp3
+
+          ffprobe -v error \
+            -show_entries format=duration,size,bit_rate:stream=codec_name,sample_rate,channels,channel_layout,bit_rate \
+            -of default=noprint_wrappers=1 \
+            teste_faber/saida/TESTE_FABER_NEURAL_STEREO.mp3 \
+            > teste_faber/saida/VALIDACAO_FFPROBE.txt
+
+          ffmpeg -hide_banner -nostats \
+            -i teste_faber/saida/TESTE_FABER_NEURAL_STEREO.mp3 \
+            -af ebur128=peak=true -f null - \
+            2> teste_faber/saida/LOUDNESS.txt || true
+
+          sha256sum teste_faber/saida/TESTE_FABER_NEURAL_STEREO.mp3 \
+            > teste_faber/saida/SHA256SUMS.txt
+
+          cat teste_faber/saida/VALIDACAO_FFPROBE.txt
+          tail -n 25 teste_faber/saida/LOUDNESS.txt
+
+      - name: Publicar teste temporario
+        uses: actions/upload-artifact@v4
+        with:
+          name: teste-faber-neural-stereo
+          path: |
+            teste_faber/saida/TESTE_FABER_NEURAL_STEREO.mp3
+            teste_faber/saida/TESTE_FABER_RAW.wav
+            teste_faber/saida/TEXTO_TESTE.txt
+            teste_faber/saida/VALIDACAO_FFPROBE.txt
+            teste_faber/saida/LOUDNESS.txt
+            teste_faber/saida/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 2
