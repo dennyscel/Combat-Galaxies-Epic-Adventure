@@ -1,0 +1,58 @@
+name: TEMP - Leilao V2 Extra Audio
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  gerar-extra:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Dependencias
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg bzip2 curl
+          python -m pip install --upgrade pip
+          python -m pip install piper-tts==1.6.0 sherpa-onnx soundfile numpy
+      - name: Modelo
+        run: |
+          mkdir -p temp_leilao_v2/modelos && cd temp_leilao_v2/modelos
+          curl -fL --retry 5 --retry-delay 3 -o faber.tar.bz2 https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-pt_BR-faber-medium.tar.bz2
+          tar -xjf faber.tar.bz2 && rm faber.tar.bz2
+      - name: Gerar extra segmentado
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          import numpy as np
+          import soundfile as sf
+          import sherpa_onnx
+          base=Path('temp_leilao_v2'); md=base/'modelos'/'vits-piper-pt_BR-faber-medium'; out=base/'extra_saida'; out.mkdir(exist_ok=True)
+          cfg=sherpa_onnx.OfflineTtsConfig(model=sherpa_onnx.OfflineTtsModelConfig(vits=sherpa_onnx.OfflineTtsVitsModelConfig(model=str(md/'pt_BR-faber-medium.onnx'),tokens=str(md/'tokens.txt'),data_dir=str(md/'espeak-ng-data')),num_threads=2,provider='cpu'),max_num_sentences=1)
+          tts=sherpa_onnx.OfflineTts(cfg); pausa=.35
+          linhas=[x.strip() for x in (base/'VIDEO10_EXTRA_FALA.txt').read_text(encoding='utf-8').splitlines() if x.strip()]
+          blocks=[]; segs=[]; cur=0.; sr=None
+          for i,t in enumerate(linhas,1):
+              a=tts.generate(text=t,sid=0,speed=1.06); sr=int(a.sample_rate); s=np.asarray(a.samples,dtype=np.float32); dur=len(s)/sr
+              segs.append({'index':i,'start':round(cur,6),'end':round(cur+dur,6),'duration':round(dur,6),'pause_after':pausa,'text':t}); blocks.append(s); cur+=dur
+              if i!=len(linhas):
+                  z=np.zeros(int(sr*pausa),dtype=np.float32); blocks.append(z); cur+=len(z)/sr
+          sf.write(out/'VIDEO10_EXTRA_RAW.wav',np.concatenate(blocks),sr,subtype='PCM_16')
+          (out/'VIDEO10_EXTRA_MANIFEST.json').write_text(json.dumps({'sample_rate':sr,'pause':pausa,'total_duration':cur,'segments':segs},ensure_ascii=False,indent=2),encoding='utf-8')
+          print('duracao=',cur,'segmentos=',len(segs))
+          PY
+      - name: Tratar
+        run: |
+          ffmpeg -y -hide_banner -loglevel warning -i temp_leilao_v2/extra_saida/VIDEO10_EXTRA_RAW.wav -af "highpass=f=75,lowpass=f=13000,acompressor=threshold=-18dB:ratio=3:attack=8:release=180,loudnorm=I=-14:TP=-1.5:LRA=11" -ar 48000 -ac 1 -c:a pcm_s16le temp_leilao_v2/extra_saida/VIDEO10_EXTRA_FABER_MONO_48000.wav
+          ffprobe -v error -show_entries format=duration -of csv=p=0 temp_leilao_v2/extra_saida/VIDEO10_EXTRA_FABER_MONO_48000.wav > temp_leilao_v2/extra_saida/DURATION.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: narracao-leilao-v2-extra
+          path: temp_leilao_v2/extra_saida/
+          retention-days: 2
