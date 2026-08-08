@@ -1,0 +1,78 @@
+name: TEMP - Finalizar audios 18 Leilao
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  gerar-audios:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Baixar codigo
+        uses: actions/checkout@v4
+
+      - name: Preparar Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar dependencias
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg bzip2 zip curl
+          python -m pip install --upgrade pip
+          python -m pip install piper-tts==1.6.0 sherpa-onnx soundfile numpy
+
+      - name: Baixar modelo Faber Medium pt-BR
+        run: |
+          set -euxo pipefail
+          mkdir -p temp_leilao_audio/modelos
+          cd temp_leilao_audio/modelos
+          curl -fL --retry 5 --retry-delay 3 \
+            -o faber.tar.bz2 \
+            https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-pt_BR-faber-medium.tar.bz2
+          tar -xjf faber.tar.bz2
+          rm -f faber.tar.bz2
+          find . -maxdepth 2 -type f | sort
+
+      - name: Gerar narracoes neurais
+        run: |
+          set -euxo pipefail
+          python temp_leilao_audio/gerar_audios.py
+
+      - name: Validar audios
+        run: |
+          set -euxo pipefail
+          cd temp_leilao_audio/saida
+          for f in *.mp3; do
+            echo "=== $f ==="
+            ffprobe -v error \
+              -show_entries format=duration,size,bit_rate:stream=codec_name,sample_rate,channels,channel_layout,bit_rate \
+              -of default=noprint_wrappers=1 "$f" \
+              > "${f%.mp3}_FFPROBE.txt"
+            ffmpeg -hide_banner -nostats -i "$f" -af ebur128=peak=true -f null - \
+              2> "${f%.mp3}_LOUDNESS.txt" || true
+            cat "${f%.mp3}_FFPROBE.txt"
+            tail -n 20 "${f%.mp3}_LOUDNESS.txt"
+          done
+          sha256sum *.mp3 *.wav segmentos/video10/*.wav segmentos/video5/*.wav > SHA256SUMS.txt
+
+      - name: Empacotar
+        run: |
+          cd temp_leilao_audio/saida
+          zip -9 -r ../../NARRACOES_FABER_18_LEILAO_FINAL.zip .
+          cd ../..
+          unzip -t NARRACOES_FABER_18_LEILAO_FINAL.zip
+
+      - name: Publicar artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: narracoes-faber-18-leilao-final
+          path: |
+            NARRACOES_FABER_18_LEILAO_FINAL.zip
+            temp_leilao_audio/saida/
+          if-no-files-found: error
+          retention-days: 2
