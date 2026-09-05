@@ -17,18 +17,23 @@ body{display:grid;place-items:center}.boot{text-align:center;padding:24px}.bar{w
  const files=['build-v4/payload_0.txt','build-v4/payload_1.txt','build-v4/payload_2.txt','build-v4/payload_3.txt'];
  try{
    const parts=await Promise.all(files.map(async f=>{
-      const r=await fetch(f,{cache:'no-store'});
+      const r=await fetch(f+'?v=4.1',{cache:'no-store'});
       if(!r.ok) throw new Error(f+' '+r.status);
       return r.text();
    }));
-   const b=parts.join('').replace(/\s+/g,'');
-   const u=Uint8Array.from(atob(b),c=>c.charCodeAt(0));
+   let b=parts.join('');
+   // GitHub/text transport can add BOMs or other invisible characters. Keep only valid Base64 chars.
+   b=b.replace(/[^A-Za-z0-9+/=]/g,'');
+   const rem=b.length%4;
+   if(rem) b+='='.repeat(4-rem);
+   const raw=atob(b);
+   const u=Uint8Array.from(raw,c=>c.charCodeAt(0));
    if(typeof DecompressionStream==='undefined') throw new Error('Este navegador não suporta a descompactação necessária.');
    const ds=new DecompressionStream('gzip');
    const text=await new Response(new Blob([u]).stream().pipeThrough(ds)).text();
    document.open();document.write(text);document.close();
  }catch(e){
-   document.body.innerHTML='<div class="boot"><strong>FALHA AO INICIAR</strong><p>Atualize o navegador e recarregue a página. Se persistir, use o HTML offline Balance v4.</p><small></small></div>';
+   document.body.innerHTML='<div class="boot"><strong>FALHA AO INICIAR</strong><p>O carregador online encontrou um erro. Recarregue a página uma vez.</p><small></small></div>';
    document.querySelector('small').textContent=e.message;
    console.error(e);
  }
