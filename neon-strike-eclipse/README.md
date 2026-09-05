@@ -1,65 +1,71 @@
-# Neon Strike: Eclipse Protocol — v8 FIRST CONTACT
+# Neon Strike: Eclipse Protocol — v9 HARDLINE
 
 Linha atual de desenvolvimento do shooter single-file. Os checkpoints anteriores e o `combatgalaxies.html` histórico permanecem preservados.
 
-## Base canônica
+## Base candidata para teste humano
 
-- Jogo: `neon_strike_eclipse_protocol_v8_first_contact.html`
-- SHA-256: `1e757b4046d00cd8454b951782577fbe1a0eaff66e4d53a7d15a9dabbf34d5d5`.
+- Jogo: `neon_strike_eclipse_protocol_v9_hardline.html`
+- SHA-256: `d0022c535b7c98be75e30bc4b28c929ac4c8f1e614f2cb3371399d0717c7d8d0`.
 - Arquivo único, sem CDN, imports ou assets externos.
-- Save: `neon_strike_eclipse_v8`, migrando v7/v6/v5/v4/v3/v2.
+- Save: `neon_strike_eclipse_v9`, migrando v8/v7/v6/v5/v4/v3/v2.
 
-## Gancho
+## Gancho preservado
 
 > Você não mata o chefe. Você o desmonta e veste as peças.
 
-A v8 preserva 2 prismas do Arconte, 3 casulos da Tecelã, 2 canhões do Leviatã, 14 fusões comportamentais, 3 atos, 6 posturas de chefe e as 4 doutrinas de arma da v7.
+A v9 mantém as tecnologias roubadas, 14 fusões, três atos, quatro doutrinas e as quatro assimilações da v8. O foco desta versão é dificuldade e progressão.
 
-## v8 — Assimilação de Doutrina
+## v9 — HARDLINE
 
-A primeira peça roubada já modifica a arma-base, sem depender da sorte das cartas:
+### Chefes
 
-- **Striker → Ressonância Rail** — ecos perfurantes na quinta rajada.
-- **Aegis → Reversor Aegis** — baterias de cobertura e contra-fogo na sexta rajada.
-- **Phantom → Eco Fantasma** — agulhas rápidas e teleguiadas na quarta rajada.
-- **Revenant → Mandíbula Parasita** — estilhaços curtos nas rajadas alternadas.
+- Casco base aproximadamente 2× maior e escala adicional por MK.
+- Partes destrutíveis muito mais resistentes.
+- Tecelã reduz o dano ao núcleo para 22% enquanto houver casulos.
+- Fase 3 começa com 38% do casco restante e recebe armadura adicional.
+- Intervalos entre repertórios foram reduzidos, mantendo telegraph de 0,66 s.
+- Arrancar uma peça agora provoca uma contramedida específica do chefe.
+- Padrões receberam mais salvas e pressão sem ultrapassar o teto técnico de projéteis.
 
-## Primeiros 60 segundos
+### Progressão
 
-Na mesma seed de QA:
+- XP efetiva reduzida para 60%.
+- Primeiro nível passa de 65 para 95 XP.
+- Curva dos níveis seguintes ficou significativamente mais íngreme.
+- Cura entre setores caiu de 4 para 2 pontos.
+- Cura de pickup caiu para 22 pontos.
+- Mercado ficou mais caro e o reparo principal caiu para 34% do casco.
 
-| Núcleo | 1ª evolução | 1º chefe | Assimilação |
-|---|---:|---:|---:|
-| Striker | 8.75 s | 26.00 s | 30.75 s |
-| Aegis | 7.75 s | 25.50 s | 33.00 s |
-| Phantom | 4.25 s | 17.25 s | 21.00 s |
-| Revenant | 6.25 s | 26.25 s | 29.75 s |
+### Três raridades reais
 
-O gancho aparece no primeiro minuto em **4/4 núcleos**.
+Todo perk/habilidade agora aparece em exatamente uma destas três raridades:
 
-## QA v8
+- **COMUM** — efeito base ×1,00.
+- **RARO** — efeito ×1,35.
+- **LENDÁRIO** — efeito ×1,80.
 
-- Stress 3 chefes × 3 fases: pico 52 projéteis hostis.
-- Robô 300 s: 3/3 chefes em touch, desktop retrato e desktop paisagem.
-- Picos hostis: 77 / 178 / 292, todos sob hard cap 200/330.
-- Heap touch 300→600 s: +48,916 bytes (~0.05 MB).
+As três raridades foram observadas em bateria de 12 seeds. A raridade altera de fato a força da evolução; não é apenas cor de carta.
+
+## QA v9
+
+- Primeiro chefe: aparece ~33 s e leva ~38 s de combate contínuo no robô de QA.
+- Progressão: ~nível 3 aos 60 s; ~nível 7 aos 120 s; nas 12 seeds de 150 s, nível 7–9.
+- Stress de chefe 3×3 fases:
+  - touch: pico 162 / limite 200;
+  - desktop retrato: pico 329 / limite 330;
+  - desktop paisagem: pico 306 / limite 330.
+- Paleta hostil: somente rampa rosa.
+- Regressão longa de quatro núcleos: 0 exceções.
 - `node --check`: PASS.
-- Erros não tratados nas baterias finais: 0.
-
-Relatório completo: `QA_REPORT_v8_20260905.md`.
-Régua: `REGUA_STATUS_v8.md`.
 
 ## Google Drive
 
 Pasta do projeto:
 https://drive.google.com/drive/folders/14JSsgfglD3oEIyzK8eKm6v5ibFJuL8h9
 
-HTML v8:
-https://drive.google.com/file/d/1rlyQHu32hC8Q03xjxN2YgBw9zYAgzEIY/view?usp=drivesdk
+HTML v9:
+https://drive.google.com/file/d/1gg6Z9gxNH01BYg2Ly4YTM53QbXRVhQ82/view?usp=drivesdk
 
-Contact sheet das assimilações:
-https://drive.google.com/file/d/1RygWAtQDamSxf9VpJFOFJzAjLGLxSmIg/view?usp=drivesdk
+## Próximo passo
 
-## Próximo alvo
-
-Expandir escopo somente por conteúdo que reforce o gancho: novos chefes precisam ter partes desmontáveis e decisões de alvo próprias. Nada de chefe antigo com mais HP e mais projéteis.
+Teste humano da v9 no celular. Ajustar apenas a sensação real de dificuldade e duração de luta; não reduzir a pressão por reflexo sem evidência de uma morte injusta.
