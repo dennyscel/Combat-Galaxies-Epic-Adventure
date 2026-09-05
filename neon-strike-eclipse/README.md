@@ -1,65 +1,65 @@
-# Neon Strike: Eclipse Protocol — v7 CORE DOCTRINES
+# Neon Strike: Eclipse Protocol — v8 FIRST CONTACT
 
-Linha atual de desenvolvimento do shooter single-file. Os checkpoints v4/v5/v6 e o `combatgalaxies.html` histórico permanecem preservados.
+Linha atual de desenvolvimento do shooter single-file. Os checkpoints anteriores e o `combatgalaxies.html` histórico permanecem preservados.
 
 ## Base canônica
 
-- Jogo: `neon_strike_eclipse_protocol_v7_core_doctrines.html`
-- Tamanho: 225.484 bytes.
-- SHA-256: `42cc514a5b7841659305f18cf44acd45cf3da06bf6db85126a90779656c7e742`.
+- Jogo: `neon_strike_eclipse_protocol_v8_first_contact.html`
+- SHA-256: `1e757b4046d00cd8454b951782577fbe1a0eaff66e4d53a7d15a9dabbf34d5d5`.
 - Arquivo único, sem CDN, imports ou assets externos.
-- Save: `neon_strike_eclipse_v7`, migrando v6/v5/v4/v3/v2.
+- Save: `neon_strike_eclipse_v8`, migrando v7/v6/v5/v4/v3/v2.
 
-## Gancho preservado
+## Gancho
 
 > Você não mata o chefe. Você o desmonta e veste as peças.
 
-A v7 preserva os três atos, seis posturas de chefe, 2 prismas do Arconte, 3 casulos da Tecelã, 2 canhões do Leviatã, 14 fusões comportamentais e 35 opções totais de construção/fusão.
+A v8 preserva 2 prismas do Arconte, 3 casulos da Tecelã, 2 canhões do Leviatã, 14 fusões comportamentais, 3 atos, 6 posturas de chefe e as 4 doutrinas de arma da v7.
 
-## v7 — quatro doutrinas de arma
+## v8 — Assimilação de Doutrina
 
-- **Striker — Lança de Pulso:** linha/rail de alta velocidade, com disparo pesado periódico.
-- **Aegis — Bateria Gêmea:** cobertura larga, duas baterias e salvas laterais; combina com a doutrina defensiva.
-- **Phantom — Agulha Espectral:** poucos projéteis muito rápidos, estreitos, teleguiados e perfurantes.
-- **Revenant — Mandíbula de Ruptura:** escopeta larga, projéteis grandes e de vida curta; exige aproximação.
+A primeira peça roubada já modifica a arma-base, sem depender da sorte das cartas:
 
-Cada núcleo também tem assinatura sonora própria. As peças roubadas e fusões entram por cima da doutrina, então o gancho continua sendo o centro da build.
+- **Striker → Ressonância Rail** — ecos perfurantes na quinta rajada.
+- **Aegis → Reversor Aegis** — baterias de cobertura e contra-fogo na sexta rajada.
+- **Phantom → Eco Fantasma** — agulhas rápidas e teleguiadas na quarta rajada.
+- **Revenant → Mandíbula Parasita** — estilhaços curtos nas rajadas alternadas.
 
-## QA v7
+## Primeiros 60 segundos
 
-`coreProbe()` mediu 12 rajadas sem perks/peças:
+Na mesma seed de QA:
 
-| Núcleo | Projéteis | Abertura | Velocidade média | Raio | Vida | Perfuração média |
-|---|---:|---:|---:|---:|---:|---:|
-| Striker | 14 | 0,00 | 1143 | 4,80 | 2,51 s | 0,14 |
-| Aegis | 28 | 0,76 rad | 894 | 4,57 | 2,64 s | 0,00 |
-| Phantom | 15 | 0,00 | 1424 | 3,72 | 2,12 s | 1,60 |
-| Revenant | 40 | 0,41 rad | 756 | 6,03 | 0,84 s | 0,10 |
+| Núcleo | 1ª evolução | 1º chefe | Assimilação |
+|---|---:|---:|---:|
+| Striker | 8.75 s | 26.00 s | 30.75 s |
+| Aegis | 7.75 s | 25.50 s | 33.00 s |
+| Phantom | 4.25 s | 17.25 s | 21.00 s |
+| Revenant | 6.25 s | 26.25 s | 29.75 s |
 
-Na mesma seed de 300 s, **4/4 núcleos cobriram 3/3 chefes**, com picos hostis de 98/178/142/176 — todos abaixo do hard cap touch de 200.
+O gancho aparece no primeiro minuto em **4/4 núcleos**.
 
-Heap touch: 2.847.760 bytes aos 300 s → 2.842.924 aos 600 s; 0 exceções, setor 29. `node --check`: PASS.
+## QA v8
+
+- Stress 3 chefes × 3 fases: pico 52 projéteis hostis.
+- Robô 300 s: 3/3 chefes em touch, desktop retrato e desktop paisagem.
+- Picos hostis: 77 / 178 / 292, todos sob hard cap 200/330.
+- Heap touch 300→600 s: +48,916 bytes (~0.05 MB).
+- `node --check`: PASS.
+- Erros não tratados nas baterias finais: 0.
+
+Relatório completo: `QA_REPORT_v8_20260905.md`.
+Régua: `REGUA_STATUS_v8.md`.
 
 ## Google Drive
 
 Pasta do projeto:
 https://drive.google.com/drive/folders/14JSsgfglD3oEIyzK8eKm6v5ibFJuL8h9
 
-HTML v7:
-https://drive.google.com/file/d/1NTNnobx8PQbzHEIqkiKMzXlE9bCo3o3Z/view?usp=drivesdk
+HTML v8:
+https://drive.google.com/file/d/1rlyQHu32hC8Q03xjxN2YgBw9zYAgzEIY/view?usp=drivesdk
 
-ZIP v7:
-https://drive.google.com/file/d/15EpdyOJaGrbPjge6iVChy5AkIis3uYJy/view?usp=drivesdk
-
-Régua v5:
-https://drive.google.com/file/d/1uiveqsQQr7FF2ZJIYunHXl4Yybp0Ysks/view?usp=drivesdk
-
-QA v7:
-https://drive.google.com/file/d/1eNIlBfhe5pY0c3qU7201jExJfrRJwOCE/view?usp=drivesdk
-
-Contact sheet das doutrinas:
-https://drive.google.com/file/d/1y4AAr0lJUQNCKJS5CWtFNf9wsSdJ9Yku/view?usp=drivesdk
+Contact sheet das assimilações:
+https://drive.google.com/file/d/1RygWAtQDamSxf9VpJFOFJzAjLGLxSmIg/view?usp=drivesdk
 
 ## Próximo alvo
 
-Medir e melhorar os **primeiros 60 segundos**. Não adicionar conteúdo genérico antes de provar essa janela.
+Expandir escopo somente por conteúdo que reforce o gancho: novos chefes precisam ter partes desmontáveis e decisões de alvo próprias. Nada de chefe antigo com mais HP e mais projéteis.
