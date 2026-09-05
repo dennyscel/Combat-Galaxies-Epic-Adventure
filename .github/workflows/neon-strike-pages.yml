@@ -27,13 +27,36 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Build playable HTML
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64, gzip, hashlib, re
+
+          root = Path('neon-strike-eclipse')
+          files = [root / 'build-v4' / f'payload_{i}.txt' for i in range(4)]
+          text = ''.join(p.read_text(encoding='utf-8-sig') for p in files)
+          clean = re.sub(r'[^A-Za-z0-9+/=]', '', text)
+          clean += '=' * ((4 - len(clean) % 4) % 4)
+          packed = base64.b64decode(clean, validate=True)
+          html = gzip.decompress(packed)
+          if b'<html' not in html[:500].lower():
+              raise SystemExit('Decoded payload is not an HTML document')
+          out = Path('site')
+          out.mkdir(exist_ok=True)
+          (out / 'index.html').write_bytes(html)
+          print('HTML bytes:', len(html))
+          print('SHA256:', hashlib.sha256(html).hexdigest())
+          PY
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
-      - name: Upload Neon Strike site
+      - name: Upload playable site
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./neon-strike-eclipse
+          path: ./site
 
       - name: Deploy to GitHub Pages
         id: deployment
