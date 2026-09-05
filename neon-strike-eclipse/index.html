@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#04060e">
+<title>Neon Strike: Eclipse Protocol · Balance v4</title>
+<style>
+html,body{margin:0;width:100%;height:100%;background:#04060e;color:#22e5ff;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+body{display:grid;place-items:center}.boot{text-align:center;padding:24px}.bar{width:min(72vw,420px);height:4px;background:#112032;margin:16px auto;overflow:hidden;border-radius:999px}.bar i{display:block;width:35%;height:100%;background:#22e5ff;animation:a 1s linear infinite}@keyframes a{from{transform:translateX(-110%)}to{transform:translateX(320%)}}small{color:#8ba5b7}p{color:#dcecf4;max-width:520px;line-height:1.45}
+</style>
+</head>
+<body>
+<div class="boot"><strong>CARREGANDO ECLIPSE PROTOCOL…</strong><div class="bar"><i></i></div><small>Balance v4</small></div>
+<script>
+(async()=>{
+ const files=['build-v4/payload_0.txt','build-v4/payload_1.txt','build-v4/payload_2.txt','build-v4/payload_3.txt'];
+ try{
+   const parts=await Promise.all(files.map(async f=>{
+      const r=await fetch(f,{cache:'no-store'});
+      if(!r.ok) throw new Error(f+' '+r.status);
+      return r.text();
+   }));
+   const b=parts.join('').replace(/\s+/g,'');
+   const u=Uint8Array.from(atob(b),c=>c.charCodeAt(0));
+   if(typeof DecompressionStream==='undefined') throw new Error('Este navegador não suporta a descompactação necessária.');
+   const ds=new DecompressionStream('gzip');
+   const text=await new Response(new Blob([u]).stream().pipeThrough(ds)).text();
+   document.open();document.write(text);document.close();
+ }catch(e){
+   document.body.innerHTML='<div class="boot"><strong>FALHA AO INICIAR</strong><p>Atualize o navegador e recarregue a página. Se persistir, use o HTML offline Balance v4.</p><small></small></div>';
+   document.querySelector('small').textContent=e.message;
+   console.error(e);
+ }
+})();
+</script>
+</body>
+</html>
