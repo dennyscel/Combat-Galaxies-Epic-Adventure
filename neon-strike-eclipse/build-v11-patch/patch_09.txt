@@ -1,0 +1,36 @@
+ = (save.bosses||0) + gainedBosses;
+   const newCore = unlockCheck();
+-  persist(); refreshMenuStats();
++  persistNow(); refreshMenuStats();
+ 
+   $('f-score').textContent = fmt(G.score);
+   $('f-wave').textContent  = G.wave;
+@@ -4468,10 +4617,16 @@
+   $('rank-name').value = '';
+   $('over-msg').textContent = newCore
+     ? 'Núcleo ' + newCore + ' liberado. Ele aparece na escolha do menu.'
+-    : G.wave >= 15 ? 'O corredor quase abriu. Mais alguns setores e o Eclipse cede.'
+-    : G.wave >= 10 ? 'O vazio recuou diante de você. A próxima incursão pode ser a definitiva.'
+-    : G.wave >= 5  ? 'Você quebrou a primeira barreira. Ajuste a construção e volte.'
+-    : 'O Eclipse venceu esta incursão, não a guerra.';
++    : G.wave >= 15 ? 'O corredor quase abriu. Você pode repetir só este ciclo ou voltar ao início.'
++    : G.wave >= 10 ? 'O vazio recuou diante de você. O checkpoint evita refazer toda a incursão.'
++    : G.wave >= 5  ? 'Você quebrou a primeira barreira. Ajuste a construção e tente o ciclo outra vez.'
++    : 'O Eclipse venceu esta tentativa, não a guerra.';
++  const cp=checkpointAt();
++  $('b-cycle').disabled=!cp;
++  $('b-cycle').textContent=cp ? 'Retomar ciclo · setor '+pad(cp.nextWave) : 'Retomar ciclo';
++  $('cycle-info').textContent=cp
++    ? 'Save '+(activeSlotIndex()+1)+' preservado: volta ao setor '+pad(cp.nextWave)+' com a construção daquele início de ciclo. O que foi obtido depois desse ponto precisa ser conquistado de novo.'
++    : 'Ainda não há checkpoint de ciclo neste save.';
+   showOverlay('ov-over');
+ }
+ function saveRank(){
+@@ -5064,9 +5219,12 @@
+     });
+   }
+ 
+-  $('b-start').addEventListener('click', startRun);
++  $('b-start').addEventListener('click', requestNewRun);
++  $('b-continue').addEventListener('click', () => resumeCycleFromSlot());
++  
