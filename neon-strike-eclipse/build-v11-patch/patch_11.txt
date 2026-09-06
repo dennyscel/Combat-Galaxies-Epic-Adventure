@@ -1,0 +1,5 @@
+onfirm('Apagar recordes, núcleos do hangar e preferências deste aparelho? Não dá para desfazer.')) return;
++    if(!confirm('Apagar recordes, núcleos, os 5 saves de ciclo e preferências deste aparelho? Não dá para desfazer.')) return;
+     try{ localStorage.removeItem(SAVE_KEY); localStorage.removeItem(LEGACY_KEY); }catch{}
+     save = JSON.parse(JSON.stringify(DEFAULTS));
+     Audio2.enabled = save.sound !== false;
