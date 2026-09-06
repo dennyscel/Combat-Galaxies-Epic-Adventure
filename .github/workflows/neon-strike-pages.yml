@@ -35,28 +35,34 @@ jobs:
           import base64, gzip, hashlib
 
           root = Path('neon-strike-eclipse/build-v10')
-          # payload_1 and payload_2 were uploaded in swapped filename order.
-          # The sequence below restores the original gzip+base64 stream exactly.
-          order = [
-              'payload_0.txt',
-              'payload_2.txt',
-              'payload_1.txt',
-              'payload_3.txt',
-              'payload_4a.txt',
-              'payload_4b.txt',
-              'payload_5.txt',
-              'payload_6.txt',
-              'payload_7.txt',
+          # Filename 1/2 were uploaded swapped. Tuple order below is the
+          # original payload order and includes exact SHA-256 validation.
+          targets = [
+              ('payload_0.txt',  '52780834d239334cc940a5a8ad4e371f03281cf2312050eba4f70d6befe892d8'),
+              ('payload_2.txt',  '55e57ae348a0b72cd8b38bae7dfacb31082c8aef08c5c2aea3c4291a686f8965'),
+              ('payload_1.txt',  '51ed5adc1639995da30f7b737cd578924abc25048fdab1b2a90bedfe54599e4f'),
+              ('payload_3.txt',  'de0eb239e9cfc1badb2adaf2e7971b5e25fab5f45f1fd6141537d6a2e1e86ccd'),
+              ('payload_4a.txt', 'f42c439e2110d46c8d1a1b758c68ba5b964b22c53957535f78198aa7a32548bf'),
+              ('payload_4b.txt', 'd34065e1a0b520ba01d42f232101dd5f7e66b26d14e1175befd68d2ef753302f'),
+              ('payload_5.txt',  '3fb75615ecc37074ff999bc07ca0b2c6978a06c7af581b2439147050103bb160'),
+              ('payload_6.txt',  '3c120a24d553b972ed6b2881398c6b7d2173d7d400984a361984c09b0a24fb41'),
+              ('payload_7.txt',  'e8deb2d248b74763e0de7ece52d0c852cda6b426ccbe22ad0e7a794858f29d21'),
           ]
 
           chunks = []
-          for name in order:
+          bad = []
+          for name, expected in targets:
               path = root / name
               if not path.exists():
                   raise SystemExit(f'Missing payload: {path}')
               s = ''.join(path.read_text(encoding='utf-8-sig').split())
+              got = hashlib.sha256(s.encode('ascii')).hexdigest()
+              print(name, 'chars:', len(s), 'sha256:', got, 'OK' if got == expected else 'MISMATCH')
+              if got != expected:
+                  bad.append((name, got, expected))
               chunks.append(s)
-              print(name, 'chars:', len(s))
+          if bad:
+              raise SystemExit('Payload SHA mismatch: ' + repr(bad))
 
           clean = ''.join(chunks)
           packed = base64.b64decode(clean, validate=True)
