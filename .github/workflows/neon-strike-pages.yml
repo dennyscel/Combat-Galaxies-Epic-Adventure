@@ -27,52 +27,50 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build playable HTML
+      - name: Build MUSIC v10 LOUD playable HTML
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
           import base64, gzip, hashlib
 
-          root = Path('neon-strike-eclipse/build-v4')
-          targets = [
-              ('payload_0.txt', 20000, 'c6b8d73667e00117a4b1bf8fef524ba2b7c4e34575dd46d8875c639f5d56ea2e'),
-              ('payload_1.txt', 20000, '9673ffc0823e8fefc99748253c9f5c4fe301fb4adc60af904893cc10785fe9df'),
-              ('payload_2.txt', 20000, '61b93919a5c2e3f82272c1ada8ace36504b4bb650d2192259488e75be9d8c2b3'),
-              ('payload_3.txt', 18768, '1b7e39847ecdbd5c9452b4e3f358012c120c2d73a4db20727dfc3cf57eede436'),
+          root = Path('neon-strike-eclipse/build-v10')
+          # payload_1 and payload_2 were uploaded in swapped filename order.
+          # The sequence below restores the original gzip+base64 stream exactly.
+          order = [
+              'payload_0.txt',
+              'payload_2.txt',
+              'payload_1.txt',
+              'payload_3.txt',
+              'payload_4a.txt',
+              'payload_4b.txt',
+              'payload_5.txt',
+              'payload_6.txt',
+              'payload_7.txt',
           ]
 
-          def digest(s):
-              return hashlib.sha256(s.encode('ascii')).hexdigest()
-
-          def repair(path, expected_len, target):
+          chunks = []
+          for name in order:
+              path = root / name
+              if not path.exists():
+                  raise SystemExit(f'Missing payload: {path}')
               s = ''.join(path.read_text(encoding='utf-8-sig').split())
-              if len(s) == expected_len and digest(s) == target:
-                  print(path.name, 'OK')
-                  return s
-              # The first upload accidentally gained one Base64 character in payloads 0/1.
-              # Find that character deterministically using the known-good chunk hash.
-              if len(s) == expected_len + 1:
-                  for i in range(len(s)):
-                      candidate = s[:i] + s[i+1:]
-                      if digest(candidate) == target:
-                          print(path.name, 'REPAIRED extra char at', i)
-                          return candidate
-              raise SystemExit(f'{path.name}: cannot repair len={len(s)} sha={digest(s)}')
+              chunks.append(s)
+              print(name, 'chars:', len(s))
 
-          chunks = [repair(root/name, n, sha) for name,n,sha in targets]
           clean = ''.join(chunks)
           packed = base64.b64decode(clean, validate=True)
           html = gzip.decompress(packed)
           html_sha = hashlib.sha256(html).hexdigest()
-          expected_html_sha = '77b56e6b43f5024ed6d39265d3edd59bd3a82b0f21b06763e1d94a926fc7dab2'
+          expected_html_sha = '9788d0bfa953bf083581e528b9e06dcd749adc3a47370ba0fd99100c600322ad'
           if html_sha != expected_html_sha:
               raise SystemExit(f'HTML SHA mismatch: {html_sha}')
+
           out = Path('site')
           out.mkdir(exist_ok=True)
           (out / 'index.html').write_bytes(html)
-          print('HTML bytes:', len(html))
-          print('HTML SHA256:', html_sha)
+          print('MUSIC v10 LOUD bytes:', len(html))
+          print('MUSIC v10 LOUD SHA256:', html_sha)
           PY
 
       - name: Configure Pages
