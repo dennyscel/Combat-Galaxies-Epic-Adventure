@@ -1,0 +1,32 @@
+--- v10.html
++++ v11.html
+@@ -9,9 +9,9 @@
+ <meta name="mobile-web-app-capable" content="yes">
+ <meta name="apple-mobile-web-app-capable" content="yes">
+ <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+-<title>Neon Strike: Eclipse Protocol · Music v10 Loud</title>
++<title>Neon Strike: Eclipse Protocol · Cycle Save v11</title>
+ <!--
+-  Neon Strike: Eclipse Protocol — Music v10 Loud
++  Neon Strike: Eclipse Protocol — Cycle Save v11
+   Arquivo único, sem dependências externas. Toda a arte, a trilha e os
+   efeitos são gerados em tempo de execução; depois de aberto uma vez,
+   funciona offline.
+@@ -406,11 +406,14 @@
+             </div>
+             <div class="acts">
+               <button id="b-start" class="btn pri">Começar incursão</button>
++              <button id="b-continue" class="btn hidden">Continuar ciclo</button>
++              <button id="b-slots" class="btn">5 espaços de save</button>
+               <button id="b-meta" class="btn">Hangar</button>
+               <button id="b-help" class="btn">Como jogar</button>
+               <button id="b-rank" class="btn">Recordes</button>
+             </div>
+             <div class="chips">
++              <div class="chip">Save <b id="s-slot">1</b>/5</div>
+               <div class="chip">Recorde <b id="s-best">0</b></div>
+               <div class="chip">Melhor setor <b id="s-wave">0</b></div>
+               <div class="chip">Incursões <b id="s-runs">0</b></div>
+@@ -422,7 +425,7 @@
+             <div class="note"><b>Construção por incursão</b><span>Cada nível oferece três evoluções. Multishot, drones, arco voltaico, críticos e escudos combinam entre si.</span></div>
+             <div class="note"><b>Três chefes em rodízio</b><span>Arconte, Tecelã e Leviatã se alternam a cada cinco setores. Ca
