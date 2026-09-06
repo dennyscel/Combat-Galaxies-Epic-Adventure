@@ -1,0 +1,25 @@
+$('b-slots').addEventListener('click', () => { Audio2.unlock(); Audio2.ui(); renderSlots(); showOverlay('ov-slots'); });
++  $('b-slots-back').addEventListener('click', () => { Audio2.ui(); showOverlay('ov-menu'); refreshMenuStats(); });
+   $('b-help').addEventListener('click', () => { Audio2.unlock(); Audio2.ui(); showOverlay('ov-help'); });
+-  $('b-help-play').addEventListener('click', startRun);
++  $('b-help-play').addEventListener('click', requestNewRun);
+   $('b-help-back').addEventListener('click', () => showOverlay('ov-menu'));
+   $('b-rank').addEventListener('click', () => { Audio2.ui(); renderRanking(); showOverlay('ov-rank'); });
+   let metaFrom = 'ov-menu';
+@@ -5076,9 +5234,10 @@
+   $('b-meta-back').addEventListener('click', () => { Audio2.ui(); refreshMenuStats(); showOverlay(metaFrom); });
+   $('b-rank-back').addEventListener('click', () => showOverlay(G.mode === 'gameover' ? 'ov-over' : 'ov-menu'));
+   $('b-resume').addEventListener('click', resumeGame);
+-  $('b-p-restart').addEventListener('click', startRun);
++  $('b-p-restart').addEventListener('click', () => { if(confirm('Recomeçar do início e substituir o checkpoint do save atual?')) startRun(); });
+   $('b-p-menu').addEventListener('click', toMenu);
+   $('b-shop-go').addEventListener('click', closeShop);
++  $('b-cycle').addEventListener('click', () => resumeCycleFromSlot());
+   $('b-retry').addEventListener('click', startRun);
+   $('b-over-menu').addEventListener('click', toMenu);
+   $('b-rank-save').addEventListener('click', saveRank);
+@@ -5094,7 +5253,7 @@
+   $('b-p-set').addEventListener('click', () => { settingsFrom = 'ov-pause'; showOverlay('ov-set'); });
+   $('b-set-close').addEventListener('click', () => showOverlay(settingsFrom));
+   $('b-set-reset').addEventListener('click', () => {
+-    if(!c
