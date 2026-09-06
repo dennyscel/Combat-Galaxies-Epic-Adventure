@@ -1,0 +1,41 @@
+utton>
+         </div>
+@@ -641,9 +658,10 @@
+    ============================================================ */
+ const SAVE_KEY = 'neon_strike_eclipse_v3';
+ const LEGACY_KEY = 'neon_strike_eclipse_v2';
++const SLOT_COUNT = 5;
+ const DEFAULTS = {
+   ranking:[], best:0, bestWave:0, runs:0, kills:0, bosses:0, core:'striker',
+-  cells:0, meta:{}, unlocked:{},
++  cells:0, meta:{}, unlocked:{}, activeSlot:0, runSlots:[null,null,null,null,null],
+   sound:true, quality:'auto', touchMode:'abs', autofire:1,
+   shake:100, haptic:1, scanlines:1, showFps:0,
+   volMaster:80, volMusic:80, volSfx:78, safeFlash:0, dmgText:1, aim:1
+@@ -660,6 +678,19 @@
+     if(typeof s.meta !== 'object' || !s.meta) s.meta = {};
+     if(typeof s.unlocked !== 'object' || !s.unlocked) s.unlocked = {};
+     s.cells = Math.max(0, Math.floor(+s.cells || 0));
++    s.activeSlot = clamp(s.activeSlot|0, 0, SLOT_COUNT-1);
++    if(!Array.isArray(s.runSlots)) s.runSlots = [];
++    s.runSlots = Array.from({length:SLOT_COUNT}, (_,i) => {
++      const v = s.runSlots[i];
++      if(!v || typeof v !== 'object') return null;
++      return {
++        checkpoint: v.checkpoint && typeof v.checkpoint === 'object' ? v.checkpoint : null,
++        claimedCells: Math.max(0, +v.claimedCells || 0),
++        claimedKills: Math.max(0, +v.claimedKills || 0),
++        claimedBosses: Math.max(0, +v.claimedBosses || 0),
++        updatedAt: +v.updatedAt || 0
++      };
++    });
+     for(const k of ['volMaster','volMusic','volSfx'])
+       s[k] = clamp(Math.round(+s[k] >= 0 ? +s[k] : DEFAULTS[k]), 0, 100);
+     return s;
+@@ -673,6 +704,42 @@
+     try{ localStorage.setItem(SAVE_KEY, JSON.stringify(save)); }catch{}
+   }, 220);
+ }
++function persistNow(){
++  clearTimeout(saveTimer);
++  try{ localStorage.setItem(SAVE_KEY, JSON.stringify(save)); }ca
