@@ -1,0 +1,31 @@
+
++}
++function renderSlots(){
++  const host=$('slot-list'); host.innerHTML='';
++  for(let i=0;i<SLOT_COUNT;i++){
++    const slot=save.runSlots[i], cp=slot&&slot.checkpoint, active=i===activeSlotIndex();
++    const row=document.createElement('div'); row.className='note';
++    const title=document.createElement('b');
++    title.textContent='Save '+(i+1)+(active?' · ATIVO':''); row.appendChild(title);
++    const desc=document.createElement('span');
++    desc.textContent=cp
++      ? 'Ciclo '+cycleNumber(cp.nextWave)+' · setor '+pad(cp.nextWave)+' · nível '+(cp.player?.level||1)+' · '+slotModuleSummary(cp)
++      : 'Vazio · pronto para uma nova incursão';
++    row.appendChild(desc);
++    const acts=document.createElement('div'); acts.className='acts'; acts.style.marginTop='9px';
++    if(cp){
++      const go=document.createElement('button'); go.className='btn pri'; go.textContent='Continuar ciclo';
++      go.addEventListener('click',()=>resumeCycleFromSlot(i)); acts.appendChild(go);
++    }
++    const use=document.createElement('button'); use.className='btn'; use.textContent=active?'Selecionado':'Usar save '+(i+1); use.disabled=active;
++    use.addEventListener('click',()=>{ save.activeSlot=i; persistNow(); renderSlots(); refreshMenuStats(); Audio2.ui(); }); acts.appendChild(use);
++    if(cp){
++      const del=document.createElement('button'); del.className='btn dgr'; del.textContent='Apagar';
++      del.addEventListener('click',()=>{ if(confirm('Apagar o checkpoint do Save '+(i+1)+'?')){ clearSlot(i); renderSlots(); refreshMenuStats(); } }); acts.appendChild(del);
++    }
++    row.appendChild(acts); host.appendChild(row);
++  }
++}
++function requestNewRun(){
++  const cp=checkpointAt();
++  if(cp && !confirm('O Save '+(activeSlotIndex()+1)+' guarda o setor '+pad(cp.nextWave)+'. Com
