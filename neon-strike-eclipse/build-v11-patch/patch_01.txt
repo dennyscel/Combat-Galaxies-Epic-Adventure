@@ -1,0 +1,12 @@
+da um tem repertório próprio, três fases e partes que dá para derrubar antes do casco.</span></div>
+             <div class="note"><b>Feito para o celular</b><span>Arraste em qualquer ponto da tela para pilotar. O tiro é automático. Toque duplo aciona o impulso.</span></div>
+-            <div class="note"><b>Progresso que sobrevive à derrota</b><span>Toda incursão rende núcleos de eclipse. Eles ficam no hangar e compram melhorias permanentes de casco, dano e coleta.</span></div>
++            <div class="note"><b>Progresso que sobrevive à derrota</b><span>Além dos núcleos do hangar, cada um dos 5 saves guarda um checkpoint no começo de cada ciclo de cinco setores. Se cair no chefe, você pode voltar ao início daquele ciclo sem refazer a incursão inteira.</span></div>
+             <div class="note"><b>Um arquivo, zero downloads</b><span>Arte, trilha e efeitos são gerados em tempo real. Funciona offline depois de aberto.</span></div>
+           </div>
+         </div>
+@@ -441,6 +444,7 @@
+           <div class="note"><b>Nova · Q ou X</b><span>O reator enche com abates. A Nova apaga os projéteis, causa dano em área e ativa uma sobrecarga temporária. Blindados e elites resistem; levar dano no casco quebra a sobrecarga.</span></div>
+           <div class="note"><b>Bomba · E ou Y</b><span>Recurso raro de emergência. Destrói alvos leves, mas blindados, elites e chefes sobrevivem. Contra chefe ela ajuda a desmontar partes sem pular a luta.</span></div>
+           <div class="note"><b>Combo</b><span>Abates encadeados multiplicam pontos e créditos até ×12. Levar dano zera o multiplicador.</span></div>
++          <div class="note"><b>Checkpoint de ciclo</b><span>Há 5 espaços de save. O jogo salva somente no começo de cada bloco de cinco setores: 1, 6, 11, 16… Se você cair no setor 55,
