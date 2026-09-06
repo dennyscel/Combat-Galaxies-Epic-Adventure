@@ -1,0 +1,38 @@
+eçar do zero substituirá esse checkpoint. Continuar?')) return;
++  startRun();
++}
++
+ /* ============================================================
+    23. CICLO DA PARTIDA
+    ============================================================ */
+@@ -4391,7 +4504,10 @@
+ }
+ function startRun(){
+   Audio2.unlock();
+-  save.runs = (save.runs||0) + 1; persist(); refreshMenuStats();
++  /* Uma nova incursão ocupa o save selecionado. O checkpoint inicial será
++     criado imediatamente antes do setor 1. */
++  save.runSlots[activeSlotIndex()] = null;
++  save.runs = (save.runs||0) + 1; persistNow(); refreshMenuStats();
+   resetRun();
+   G.mode = 'playing'; Audio2.musicModeChanged(true); G.clock = 0; G.wave = 0; G.score = 0; G.credits = 0;
+   G.combo = 1; G.comboT = 0; G.kills = 0; G.levelQueue = 0;
+@@ -4405,6 +4521,27 @@
+   showOverlay(null); setRunUi(true); hudDirty = true; updateHud(0);
+   startWave();
+ }
++function resumeCycleFromSlot(i=activeSlotIndex()){
++  const slot=save.runSlots[i], cp=slot&&slot.checkpoint;
++  if(!cp || !cp.player){ Audio2.deny(); return false; }
++  Audio2.unlock();
++  save.activeSlot=i; save.core=cp.core||save.core; persistNow();
++  resetRun();
++  G.mode='playing'; Audio2.musicModeChanged(true); G.clock=0; G.wave=cp.wave|0;
++  G.score=+cp.score||0; G.credits=+cp.credits||0; G.combo=1; G.comboT=0;
++  G.kills=+cp.kills||0; G.bossKills=+cp.bossKills||0; G.levelQueue=cp.levelQueue|0;
++  G.waveActive=false; G.boss=null; G.bossPending=false; G.bossCleared=false;
++  G.transition=null; G.deathT=0; G.rankPending=false; G.trauma=0; G.flash=0; G.hitStop=0; G.droneT=.25;
++  G.startedAt=performance.now();
++  G.player=cloneData(cp.player);
++  G.player.alive=true; G.player.fireT=0; G.player.dashing=0; G.player.iframes=0; G.player.dashGrace=0;
++  IN.down=false; IN.usingPoin
