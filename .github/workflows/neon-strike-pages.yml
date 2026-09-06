@@ -27,31 +27,66 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build CYCLE SAVE v11 playable HTML
+      - name: Build CYCLE SAVE v11 from validated v10 plus patch
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import gzip, hashlib
+          import base64, gzip, hashlib, subprocess
 
-          src = Path('neon-strike-eclipse/build-v11/game_v11.html.gz')
-          packed = src.read_bytes()
-          packed_sha = hashlib.sha256(packed).hexdigest()
-          expected_packed_sha = '45ed4a459599e6202f08704f100ec61f77433e67f8de53e3b099f6d4d029a7b5'
-          if packed_sha != expected_packed_sha:
-              raise SystemExit(f'GZIP SHA mismatch: {packed_sha}')
+          root = Path('neon-strike-eclipse/build-v10')
+          targets = [
+              ('payload_0.txt',  '52780834d239334cc940a5a8ad4e371f03281cf2312050eba4f70d6befe892d8'),
+              ('payload_2.txt',  '55e57ae348a0b72cd8b38bae7dfacb31082c8aef08c5c2aea3c4291a686f8965'),
+              ('payload_1a.txt', 'ea339fef8674ae998e27d05dad797d02224b393b75f8bba3cc7202b65d1e5c1d'),
+              ('payload_1b.txt', '8284f4253b17ff2f2e1ce0c9f481b2aada710adddde356d94726b8ac184779ce'),
+              ('payload_3.txt',  'de0eb239e9cfc1badb2adaf2e7971b5e25fab5f45f1fd6141537d6a2e1e86ccd'),
+              ('payload_4a.txt', 'f42c439e2110d46c8d1a1b758c68ba5b964b22c53957535f78198aa7a32548bf'),
+              ('payload_4b.txt', 'd34065e1a0b520ba01d42f232101dd5f7e66b26d14e1175befd68d2ef753302f'),
+              ('payload_5.txt',  '3fb75615ecc37074ff999bc07ca0b2c6978a06c7af581b2439147050103bb160'),
+              ('payload_6.txt',  '3c120a24d553b972ed6b2881398c6b7d2173d7d400984a361984c09b0a24fb41'),
+              ('payload_7.txt',  'e8deb2d248b74763e0de7ece52d0c852cda6b426ccbe22ad0e7a794858f29d21'),
+          ]
 
-          html = gzip.decompress(packed)
-          html_sha = hashlib.sha256(html).hexdigest()
-          expected_html_sha = 'a2286dff4fc4816e80c1b780555b2e7d05738f8636c7ad13600143e53da1aa00'
-          if html_sha != expected_html_sha:
-              raise SystemExit(f'HTML SHA mismatch: {html_sha}')
+          chunks = []
+          for name, expected in targets:
+              s = ''.join((root / name).read_text(encoding='utf-8-sig').split())
+              got = hashlib.sha256(s.encode('ascii')).hexdigest()
+              if got != expected:
+                  raise SystemExit(f'v10 payload mismatch {name}: {got}')
+              chunks.append(s)
+
+          v10 = gzip.decompress(base64.b64decode(''.join(chunks), validate=True))
+          v10_sha = hashlib.sha256(v10).hexdigest()
+          expected_v10 = '9788d0bfa953bf083581e528b9e06dcd749adc3a47370ba0fd99100c600322ad'
+          if v10_sha != expected_v10:
+              raise SystemExit(f'v10 HTML mismatch: {v10_sha}')
+
+          patch_root = Path('neon-strike-eclipse/build-v11-patch')
+          patch_bytes = b''.join((patch_root / f'patch_{i:02d}.txt').read_bytes() for i in range(12))
+          patch_sha = hashlib.sha256(patch_bytes).hexdigest()
+          expected_patch = 'bc4ed3a586bb2924650ad1b1c9ede8c5f6456a795cbdad0c41fc2984c13a298e'
+          if patch_sha != expected_patch:
+              raise SystemExit(f'v11 patch mismatch: {patch_sha}')
+
+          work = Path('cycle-build')
+          work.mkdir(exist_ok=True)
+          target = work / 'v10.html'
+          target.write_bytes(v10)
+          subprocess.run(['patch', '-s', 'v10.html'], input=patch_bytes, cwd=work, check=True)
+
+          v11 = target.read_bytes()
+          v11_sha = hashlib.sha256(v11).hexdigest()
+          expected_v11 = 'a2286dff4fc4816e80c1b780555b2e7d05738f8636c7ad13600143e53da1aa00'
+          if v11_sha != expected_v11:
+              raise SystemExit(f'v11 HTML mismatch: {v11_sha}')
 
           out = Path('site')
           out.mkdir(exist_ok=True)
-          (out / 'index.html').write_bytes(html)
-          print('CYCLE SAVE v11 bytes:', len(html))
-          print('CYCLE SAVE v11 SHA256:', html_sha)
+          (out / 'index.html').write_bytes(v11)
+          print('CYCLE SAVE v11 bytes:', len(v11))
+          print('CYCLE SAVE v11 SHA256:', v11_sha)
+          print('Patch SHA256:', patch_sha)
           PY
 
       - name: Configure Pages
@@ -66,4 +101,4 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-# deploy marker: cycle-save-v11-fixed
+# deploy marker: cycle-save-v11-patch-validated
