@@ -1,0 +1,36 @@
+ saveCycleCheckpoint();
+   G.wave++; G.waveActive = true; G.bossCleared = false;
+   G.spawns.length = 0; G.transition = null;
+   const p = G.player;
+@@ -4193,8 +4263,8 @@
+ /* ============================================================
+    22. INTERFACE
+    ============================================================ */
+-const OVERLAY_IDS = ['ov-menu','ov-help','ov-set','ov-pause','ov-level','ov-shop','ov-rank','ov-over','ov-meta'];
+-const FREEZE = new Set(['ov-help','ov-set','ov-pause','ov-level','ov-shop','ov-rank','ov-over','ov-meta']);
++const OVERLAY_IDS = ['ov-menu','ov-help','ov-set','ov-pause','ov-level','ov-shop','ov-rank','ov-over','ov-meta','ov-slots'];
++const FREEZE = new Set(['ov-help','ov-set','ov-pause','ov-level','ov-shop','ov-rank','ov-over','ov-meta','ov-slots']);
+ let activeOverlay = 'ov-menu';
+ function showOverlay(id){
+   for(const o of OVERLAY_IDS) $(o).classList.toggle('hidden', o !== id);
+@@ -4304,6 +4374,11 @@
+   $('s-runs').textContent  = save.runs || 0;
+   $('s-kills').textContent = fmt(save.kills || 0);
+   $('s-cells').textContent = fmt(save.cells || 0);
++  const si = activeSlotIndex(), cp = checkpointAt(si);
++  $('s-slot').textContent = si + 1;
++  $('b-continue').classList.toggle('hidden', !cp);
++  $('b-continue').textContent = cp ? 'Continuar · setor ' + pad(cp.nextWave) : 'Continuar ciclo';
++  $('b-start').textContent = 'Nova incursão · save ' + (si+1);
+   paintCores();
+ }
+ /* O núcleo bloqueado continua visível com o requisito à mostra:
+@@ -4376,6 +4451,44 @@
+   });
+ }
+ 
++function slotModuleSummary(cp){
++  if(!cp || !cp.player || !cp.player.modules) return 'sem peças';
++  const out=[];
++  for(const k in MODULES){ const lv=cp.player.modules[k]||0; if(lv) out.push(MODULES[k].icon+'×'+lv); }
++  return out.length ? out.join(' ') : 'sem peças';
