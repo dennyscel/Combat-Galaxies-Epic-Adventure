@@ -37,7 +37,7 @@ jobs:
           src = Path('neon-strike-eclipse/build-v11/game_v11.html.gz')
           packed = src.read_bytes()
           packed_sha = hashlib.sha256(packed).hexdigest()
-          expected_packed_sha = 'd5fe1690ace0bc4942c69fe941066da1fc6c83632815adf73525823b9b73538c'
+          expected_packed_sha = '45ed4a459599e6202f08704f100ec61f77433e67f8de53e3b099f6d4d029a7b5'
           if packed_sha != expected_packed_sha:
               raise SystemExit(f'GZIP SHA mismatch: {packed_sha}')
 
@@ -66,4 +66,4 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-# deploy marker: cycle-save-v11
+# deploy marker: cycle-save-v11-fixed
