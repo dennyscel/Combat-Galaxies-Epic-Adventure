@@ -1,0 +1,36 @@
+ter=false; IN.tx=G.player.x; IN.ty=G.player.y;
++  $('boss-wrap').classList.remove('on');
++  showOverlay(null); setRunUi(true); hudDirty=true; updateHud(0);
++  startWave();
++  toast('Ciclo restaurado · setor '+pad(cp.nextWave), '#5cffb1', 1800);
++  return true;
++}
+ function toMenu(){
+   G.mode = 'menu'; Audio2.musicModeChanged(true); G.waveActive = false; G.boss = null; G.transition = null;
+   clearEvents(); IN.down = false;
+@@ -4443,15 +4580,27 @@
+   clearEvents();
+   $('boss-card').classList.remove('on');
+ 
+-  const gained = cellsFor();
++  /* Retomar um checkpoint não pode virar fazenda infinita de núcleos/abates.
++     Cada save mantém o MAIOR total já creditado nesta incursão; uma nova morte
++     paga somente a diferença conquistada além da tentativa anterior. */
++  const slot = save.runSlots[activeSlotIndex()] || {checkpoint:null,claimedCells:0,claimedKills:0,claimedBosses:0,updatedAt:Date.now()};
++  save.runSlots[activeSlotIndex()] = slot;
++  const totalCells = cellsFor();
++  const gained = Math.max(0, totalCells - (+slot.claimedCells||0));
++  const gainedKills = Math.max(0, G.kills - (+slot.claimedKills||0));
++  const gainedBosses = Math.max(0, G.bossKills - (+slot.claimedBosses||0));
++  slot.claimedCells = Math.max(+slot.claimedCells||0, totalCells);
++  slot.claimedKills = Math.max(+slot.claimedKills||0, G.kills);
++  slot.claimedBosses = Math.max(+slot.claimedBosses||0, G.bossKills);
++  slot.updatedAt = Date.now();
+   G.cellsEarned = gained;
+   save.cells   = (save.cells||0) + gained;
+   save.best     = Math.max(save.best||0, Math.floor(G.score));
+   save.bestWave = Math.max(save.bestWave||0, G.wave);
+-  save.kills    = (save.kills||0) + G.kills;
+-  save.bosses   = (save.bosses||0) + G.bossKills;
++  save.kills    = (save.kills||0) + gainedKills;
++  save.bosses  
