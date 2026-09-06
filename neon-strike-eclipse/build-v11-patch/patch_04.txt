@@ -1,0 +1,44 @@
+tch{}
++}
++const cloneData = o => JSON.parse(JSON.stringify(o));
++const activeSlotIndex = () => clamp(save.activeSlot|0, 0, SLOT_COUNT-1);
++function slotAt(i=activeSlotIndex()){ return save.runSlots[i] || null; }
++function checkpointAt(i=activeSlotIndex()){ const s=slotAt(i); return s && s.checkpoint ? s.checkpoint : null; }
++function cycleNumber(nextWave){ return Math.floor(Math.max(0,nextWave-1)/5) + 1; }
++
++/* O checkpoint é um SAVE explícito de fronteira de ciclo, não estado de frame.
++   Só é escrito antes dos setores 1, 6, 11, 16… Isso preserva a tensão de
++   cinco setores inteiros e ainda evita perder uma incursão de uma hora. */
++function saveCycleCheckpoint(){
++  const p = G.player;
++  if(!p || !p.alive) return;
++  const i = activeSlotIndex();
++  const old = save.runSlots[i] || {};
++  const nextWave = G.wave + 1;
++  save.runSlots[i] = {
++    checkpoint:{
++      version:1, wave:G.wave, nextWave, score:G.score, credits:G.credits,
++      combo:1, comboT:0, kills:G.kills, bossKills:G.bossKills, levelQueue:G.levelQueue,
++      core:save.core, player:cloneData(p), at:Date.now()
++    },
++    claimedCells:Math.max(0,+old.claimedCells||0),
++    claimedKills:Math.max(0,+old.claimedKills||0),
++    claimedBosses:Math.max(0,+old.claimedBosses||0),
++    updatedAt:Date.now()
++  };
++  persistNow();
++}
++function clearSlot(i=activeSlotIndex()){
++  save.runSlots[i] = null;
++  persistNow();
++}
+ 
+ /* ============================================================
+    2b. PROGRESSÃO PERMANENTE
+@@ -4023,6 +4090,9 @@
+ }
+ function startWave(){
+   if(G.mode !== 'playing' || !G.player.alive) return;
++  /* Checkpoint exato do começo do ciclo. Se o jogador morrer no setor 55,
++     o último save é feito aqui quando G.wave==50, portanto retorna ao 51. */
++  if(G.wave === 0 || G.wave % 5 === 0)
