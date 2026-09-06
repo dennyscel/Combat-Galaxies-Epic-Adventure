@@ -27,124 +27,59 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build exact Deca Protocol v13
+      - name: Build exact Deca Protocol v14 Hardline
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
           import base64, gzip, hashlib, subprocess
-
-          def sha256(data):
-              return hashlib.sha256(data).hexdigest()
-
-          def b64gzip_chunks(root, names):
-              text = ''.join(''.join((root / n).read_text(encoding='utf-8-sig').split()) for n in names)
-              return gzip.decompress(base64.b64decode(text, validate=True))
-
-          # 1) Rebuild validated v10.
-          root = Path('neon-strike-eclipse/build-v10')
-          targets = [
-              ('payload_0.txt',  '52780834d239334cc940a5a8ad4e371f03281cf2312050eba4f70d6befe892d8'),
-              ('payload_2.txt',  '55e57ae348a0b72cd8b38bae7dfacb31082c8aef08c5c2aea3c4291a686f8965'),
-              ('payload_1a.txt', 'ea339fef8674ae998e27d05dad797d02224b393b75f8bba3cc7202b65d1e5c1d'),
-              ('payload_1b.txt', '8284f4253b17ff2f2e1ce0c9f481b2aada710adddde356d94726b8ac184779ce'),
-              ('payload_3.txt',  'de0eb239e9cfc1badb2adaf2e7971b5e25fab5f45f1fd6141537d6a2e1e86ccd'),
-              ('payload_4a.txt', 'f42c439e2110d46c8d1a1b758c68ba5b964b22c53957535f78198aa7a32548bf'),
-              ('payload_4b.txt', 'd34065e1a0b520ba01d42f232101dd5f7e66b26d14e1175befd68d2ef753302f'),
-              ('payload_5.txt',  '3fb75615ecc37074ff999bc07ca0b2c6978a06c7af581b2439147050103bb160'),
-              ('payload_6.txt',  '3c120a24d553b972ed6b2881398c6b7d2173d7d400984a361984c09b0a24fb41'),
-              ('payload_7.txt',  'e8deb2d248b74763e0de7ece52d0c852cda6b426ccbe22ad0e7a794858f29d21'),
-          ]
-          chunks = []
-          for name, expected in targets:
-              s = ''.join((root / name).read_text(encoding='utf-8-sig').split())
-              got = sha256(s.encode('ascii'))
-              if got != expected:
-                  raise SystemExit(f'v10 payload mismatch {name}: {got}')
+          def sha256(data): return hashlib.sha256(data).hexdigest()
+          def b64gzip_chunks(root,names):
+              text=''.join(''.join((root/n).read_text(encoding='utf-8-sig').split()) for n in names)
+              return gzip.decompress(base64.b64decode(text,validate=True))
+          root=Path('neon-strike-eclipse/build-v10')
+          targets=[('payload_0.txt','52780834d239334cc940a5a8ad4e371f03281cf2312050eba4f70d6befe892d8'),('payload_2.txt','55e57ae348a0b72cd8b38bae7dfacb31082c8aef08c5c2aea3c4291a686f8965'),('payload_1a.txt','ea339fef8674ae998e27d05dad797d02224b393b75f8bba3cc7202b65d1e5c1d'),('payload_1b.txt','8284f4253b17ff2f2e1ce0c9f481b2aada710adddde356d94726b8ac184779ce'),('payload_3.txt','de0eb239e9cfc1badb2adaf2e7971b5e25fab5f45f1fd6141537d6a2e1e86ccd'),('payload_4a.txt','f42c439e2110d46c8d1a1b758c68ba5b964b22c53957535f78198aa7a32548bf'),('payload_4b.txt','d34065e1a0b520ba01d42f232101dd5f7e66b26d14e1175befd68d2ef753302f'),('payload_5.txt','3fb75615ecc37074ff999bc07ca0b2c6978a06c7af581b2439147050103bb160'),('payload_6.txt','3c120a24d553b972ed6b2881398c6b7d2173d7d400984a361984c09b0a24fb41'),('payload_7.txt','e8deb2d248b74763e0de7ece52d0c852cda6b426ccbe22ad0e7a794858f29d21')]
+          chunks=[]
+          for name,expected in targets:
+              s=''.join((root/name).read_text(encoding='utf-8-sig').split())
+              if sha256(s.encode('ascii'))!=expected: raise SystemExit('v10 payload mismatch '+name)
               chunks.append(s)
-          v10 = gzip.decompress(base64.b64decode(''.join(chunks), validate=True))
-          if sha256(v10) != '9788d0bfa953bf083581e528b9e06dcd749adc3a47370ba0fd99100c600322ad':
-              raise SystemExit('v10 HTML hash mismatch')
-
-          work = Path('deca-build')
-          work.mkdir(exist_ok=True)
-          target = work / 'game.html'
-          target.write_bytes(v10)
-
-          # 2) Cycle Save v11.
-          v11_root = Path('neon-strike-eclipse/build-v11-patch')
-          v11_patch = b''.join((v11_root / f'patch_{i:02d}.txt').read_bytes() for i in range(12))
-          if sha256(v11_patch) != 'bc4ed3a586bb2924650ad1b1c9ede8c5f6456a795cbdad0c41fc2984c13a298e':
-              raise SystemExit('v11 patch hash mismatch')
-          subprocess.run(['patch', '-s', 'game.html'], input=v11_patch, cwd=work, check=True)
-          v11 = target.read_bytes()
-          if sha256(v11) != 'a2286dff4fc4816e80c1b780555b2e7d05738f8636c7ad13600143e53da1aa00':
-              raise SystemExit(f'v11 HTML mismatch: {sha256(v11)}')
-
-          # 3) v12 art/direction.
-          v12_root = Path('neon-strike-eclipse/build-v13')
-          v12_patch = b64gzip_chunks(v12_root, ['v12_patch_00.b64', 'v12_patch_01.b64'])
-          subprocess.run(['patch', '-s', 'game.html'], input=v12_patch, cwd=work, check=True)
-          v12 = target.read_bytes()
-          expected_v12 = '5c225395e94f41e0753aa8d9ead8c7b3ef146e925c8b82729e5db339de3c2c16'
-          if sha256(v12) != expected_v12:
-              raise SystemExit(f'v12 HTML mismatch: {sha256(v12)}')
-
-          # 4) Exact Deca v13 delta. The source patch intentionally represents
-          # a target without a final newline, so GNU patch needs one terminator
-          # for parsing. After applying, line endings are restored byte-for-byte.
-          deca_root = Path('neon-strike-eclipse/build-v13-exact')
-          deca_names = [f'deca_patch_{i:02d}.b64' for i in range(5)]
-          deca_patch = b64gzip_chunks(deca_root, deca_names)
-          expected_patch = 'c769934f2f022f3b180612958aaec04aa90b3c08acfc461dab12d874eb6959b8'
-          if sha256(deca_patch) != expected_patch:
-              raise SystemExit(f'Deca patch mismatch: {sha256(deca_patch)}')
-          patch_input = deca_patch if deca_patch.endswith(b'\n') else deca_patch + b'\n'
-          subprocess.run(['patch', '-s', 'game.html'], input=patch_input, cwd=work, check=True)
-
-          # GNU patch writes LF. The owner's canonical v13 is CRLF and has no
-          # final newline. Restore that exact byte representation and verify SHA.
-          v13_lf = target.read_bytes()
-          v13 = v13_lf.replace(b'\n', b'\r\n')
-          if v13.endswith(b'\r\n'):
-              v13 = v13[:-2]
-          v13_sha = sha256(v13)
-          expected_v13 = '21fae3b16af1affcbb6af8e87995db04e1e680f5f24d00cfd2bbb0bdce161919'
-          if v13_sha != expected_v13:
-              raise SystemExit(f'Deca v13 HTML mismatch: {v13_sha}')
-
-          text = v13.decode('utf-8')
-          required = [
-              'Deca Protocol v13',
-              'DECA PROTOCOL / ARQUIVO DE AMEAÇAS',
-              "BOSS_ORDER.push('cacadora','bastiao','hidra','jardineiro','espectro','cronarca','imperatriz')",
-              'Dossiê · treinar chefes',
-              'Treino livre · nave com 220 de casco',
-              'MUSIC v10 LOUD',
-              '5 espaços de save'
-          ]
-          missing = [x for x in required if x not in text]
-          if missing:
-              raise SystemExit('v13 content gate failed: ' + repr(missing))
-
-          out = Path('site')
-          out.mkdir(exist_ok=True)
-          (out / 'index.html').write_bytes(v13)
-          print('DECA PROTOCOL v13 bytes:', len(v13))
-          print('DECA PROTOCOL v13 SHA256:', v13_sha)
-          print('Deca exact patch SHA256:', sha256(deca_patch))
+          v10=gzip.decompress(base64.b64decode(''.join(chunks),validate=True))
+          if sha256(v10)!='9788d0bfa953bf083581e528b9e06dcd749adc3a47370ba0fd99100c600322ad': raise SystemExit('v10 mismatch')
+          work=Path('hardline-build');work.mkdir(exist_ok=True);target=work/'game.html';target.write_bytes(v10)
+          r=Path('neon-strike-eclipse/build-v11-patch');p11=b''.join((r/f'patch_{i:02d}.txt').read_bytes() for i in range(12))
+          if sha256(p11)!='bc4ed3a586bb2924650ad1b1c9ede8c5f6456a795cbdad0c41fc2984c13a298e': raise SystemExit('v11 patch mismatch')
+          subprocess.run(['patch','-s','game.html'],input=p11,cwd=work,check=True)
+          if sha256(target.read_bytes())!='a2286dff4fc4816e80c1b780555b2e7d05738f8636c7ad13600143e53da1aa00': raise SystemExit('v11 mismatch')
+          r=Path('neon-strike-eclipse/build-v13');p12=b64gzip_chunks(r,['v12_patch_00.b64','v12_patch_01.b64'])
+          subprocess.run(['patch','-s','game.html'],input=p12,cwd=work,check=True)
+          if sha256(target.read_bytes())!='5c225395e94f41e0753aa8d9ead8c7b3ef146e925c8b82729e5db339de3c2c16': raise SystemExit('v12 mismatch')
+          r=Path('neon-strike-eclipse/build-v13-exact');p13=b64gzip_chunks(r,[f'deca_patch_{i:02d}.b64' for i in range(5)])
+          if sha256(p13)!='c769934f2f022f3b180612958aaec04aa90b3c08acfc461dab12d874eb6959b8': raise SystemExit('v13 patch mismatch')
+          subprocess.run(['patch','-s','game.html'],input=p13 if p13.endswith(b'\n') else p13+b'\n',cwd=work,check=True)
+          v13lf=target.read_bytes();v13=v13lf.replace(b'\n',b'\r\n')
+          if v13.endswith(b'\r\n'):v13=v13[:-2]
+          if sha256(v13)!='21fae3b16af1affcbb6af8e87995db04e1e680f5f24d00cfd2bbb0bdce161919':raise SystemExit('v13 mismatch')
+          target.write_bytes(v13.replace(b'\r\n',b'\n'))
+          p14=base64.b64decode('LS0tIHYxM19sZi5odG1sCTIwMjYtMDktMDYgMTk6MDY6NTQuODM0Njc2MjI1ICswMDAwCisrKyBOZW9uLVN0cmlrZS1EZWNhLVByb3RvY29sLXYxNF9IQVJETElORS5odG1sCTIwMjYtMDktMDYgMTk6MDQ6MjQuNjcwMjIxOTU4ICswMDAwCkBAIC05LDkgKzksOSBAQAogPG1ldGEgbmFtZT0ibW9iaWxlLXdlYi1hcHAtY2FwYWJsZSIgY29udGVudD0ieWVzIj4KIDxtZXRhIG5hbWU9ImFwcGxlLW1vYmlsZS13ZWItYXBwLWNhcGFibGUiIGNvbnRlbnQ9InllcyI+CiA8bWV0YSBuYW1lPSJhcHBsZS1tb2JpbGUtd2ViLWFwcC1zdGF0dXMtYmFyLXN0eWxlIiBjb250ZW50PSJibGFjay10cmFuc2x1Y2VudCI+Ci08dGl0bGU+TmVvbiBTdHJpa2U6IEVjbGlwc2UgUHJvdG9jb2wgwrcgRGVjYSBQcm90b2NvbCB2MTM8L3RpdGxlPgorPHRpdGxlPk5lb24gU3RyaWtlOiBFY2xpcHNlIFByb3RvY29sIMK3IERlY2EgUHJvdG9jb2wgdjE0IMK3IEhhcmRsaW5lPC90aXRsZT4KIDwhLS0KLSAgTmVvbiBTdHJpa2U6IEVjbGlwc2UgUHJvdG9jb2wg4oCUIERlY2EgUHJvdG9jb2wgdjEzCisgIE5lb24gU3RyaWtlOiBFY2xpcHNlIFByb3RvY29sIOKAlCBEZWNhIFByb3RvY29sIHYxNCDCtyBIYXJkbGluZQogICBBcnF1aXZvIMO6bmljbywgc2VtIGRlcGVuZMOqbmNpYXMgZXh0ZXJuYXMuIFRvZGEgYSBhcnRlLCBhIHRyaWxoYSBlIG9zCiAgIGVmZWl0b3Mgc8OjbyBnZXJhZG9zIGVtIHRlbXBvIGRlIGV4ZWN1w6fDo287IGRlcG9pcyBkZSBhYmVydG8gdW1hIHZleiwKICAgZnVuY2lvbmEgb2ZmbGluZS4KQEAgLTU4Nyw3ICs1ODcsNyBAQAogICAgIDwhLS0gR0FNRSBPVkVSIC0tPgogICAgIDxzZWN0aW9uIGlkPSJvdi1vdmVyIiBjbGFzcz0ib3YgaGlkZGVuIj4KICAgICAgIDxkaXYgY2xhc3M9ImNhcmQgc20iPgotICAgICAgICA8cCBjbGFzcz0iZXllYnJvdyIgc3R5bGU9ImNvbG9yOnZhcigtLWRhbmdlcikiPlNpbmFsIHZpdGFsIHBlcmRpZG88L3A+CisgICAgICAgIDxwIGNsYXNzPSJleWVicm93IiBzdHlsZT0iY29sb3I6dmFyKC0tdmlvbGV0KSI+U2luYWwgdml0YWwgcGVyZGlkbzwvcD4KICAgICAgICAgPGgyIGlkPSJvdmVyLXRpdGxlIj5OYXZlIGRlc3RydcOtZGE8L2gyPgogICAgICAgICA8cCBpZD0ib3Zlci1tc2ciIGNsYXNzPSJsZWRlIiBzdHlsZT0ibWFyZ2luLWlubGluZTphdXRvIj5PIEVjbGlwc2UgdmVuY2V1IGVzdGEgaW5jdXJzw6NvLCBuw6NvIGEgZ3VlcnJhLjwvcD4KICAgICAgICAgPGRpdiBjbGFzcz0ic3RhdHMzIj4KQEAgLTI2NzksNyArMjY3OSw3IEBACiAgICA9PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0gKi8KIGZ1bmN0aW9uIG1ha2VQbGF5ZXIoKXsKICAgY29uc3QgcCA9IHsKLSAgICB4OlYudy8yLCB5OlYuaCouOCwgdng6MCwgdnk6MCwgcjoyMCwgaGl0Ujo4LCB0aWx0OjAsIGFsaXZlOnRydWUsCisgICAgeDpWLncvMiwgeTpWLmgqLjgsIHZ4OjAsIHZ5OjAsIHI6MjAsIGhpdFI6NiwgdGlsdDowLCBhbGl2ZTp0cnVlLAogICAgIG1heEhwOjEwMCwgaHA6MTAwLCBkYW1hZ2U6MTQsIGZpcmVHYXA6LjE3LCBmaXJlVDowLCBidWxsZXRTcGVlZDoxMDAwLCBzcGVlZDo0ODAsCiAgICAgbXVsdGlzaG90OjAsIHNwcmVhZDouMTE1LCBwaWVyY2U6MCwgY3JpdDouMDUsIGNyaXRNdWx0OjIsCiAgICAgY2hhaW46MCwgY2hhaW5EbWc6LjQ4LCBob21pbmc6MCwgbWlzc2lsZXM6MCwgbWlzc2lsZU46MCwgZHJvbmVzOjAsCkBAIC0yNzI2LDI2ICsyNzI2LDMyIEBACiAgIHJldHVybiB7IGRwc1JhdGlvLCBwcmVzc3VyZSwgZGVmZW5zZSB9OwogfQogZnVuY3Rpb24gZW5lbXlIcFNjYWxlKCl7Ci0gIGNvbnN0IHEgPSBwbGF5ZXJQb3dlclByb2ZpbGUoKTsKLSAgLyogQSBidWlsZCBhaW5kYSBwdXhhIGEgZGlmaWN1bGRhZGUgcGFyYSBjaW1hLCBtYXMgbsOjbyAxOjEgbG9nbyBubyBjb21lw6dvLgotICAgICBPIHBlc28gZGUgUG93ZXItVXAgY3Jlc2NlIHBvciBmYWl4YXM6IHNldG9yIDkgY29udGludWEgZXNjYWxhbmRvLCBzw7MgbsOjbwotICAgICBwdW5lIHVtYSBib2EgYnVpbGQgY29tbyBzZSBlbGEgasOhIGVzdGl2ZXNzZSBubyBlbmRnYW1lLiAqLwotICBjb25zdCBzZWN0b3IgPSAxICsgRy53YXZlKi4xNSArIE1hdGgucG93KE1hdGgubWF4KDAsRy53YXZlLTEpLDEuMTMpKi4wMjA7Ci0gIGNvbnN0IGJ1aWxkV2VpZ2h0ID0gRy53YXZlIDw9IDUgPyAuMjUgOiBHLndhdmUgPD0gOSA/IC4zMCA6IEcud2F2ZSA8PSAxNCA/IC4zNiA6IC40MjsKLSAgY29uc3QgYnVpbGQgPSAxICsgcS5wcmVzc3VyZSpidWlsZFdlaWdodCArIE1hdGgubWF4KDAscS5kZWZlbnNlLTEpKi4wNjsKLSAgcmV0dXJuIHNlY3RvciAqIGJ1aWxkOworICBjb25zdCBxID0gcGxheWVyUG93ZXJQcm9maWxlKCksIHcgPSBHLndhdmU7CisgIC8qIEhBUkRMSU5FIHYxNCDigJQgbyB2MTMgZGVpeGF2YSBidWlsZHMgdGFyZGlhcyBjcmVzY2VyZW0gbXVpdG8gbWFpcyByw6FwaWRvCisgICAgIHF1ZSBvIGNhc2NvIGluaW1pZ28uIEEgcGFydGlyIGRvIG1pZGdhbWUgbyBjYXNjbyBwYXNzYSBhIGFjb21wYW5oYXIgdW1hCisgICAgIGZyYcOnw6NvIFNVQkxJTkVBUiBkbyBEUFMgcmVhbDogYSBidWlsZCBjb250aW51YSB2YWxlbmRvLCBtYXMgbsOjbyBhcGFnYSB1bWEKKyAgICAgb25kYSBpbnRlaXJhIGFudGVzIGRlIG9zIGluaW1pZ29zIGNvbnNlZ3VpcmVtIGV4ZWN1dGFyIG8gcmVwZXJ0w7NyaW8uCisgICAgIEEgcG9udGUgNuKAkzkgY29udGludWEgcHJvdGVnaWRhLiAqLworICBjb25zdCBzZWN0b3IgPSAxICsgdyouMTU1ICsgTWF0aC5wb3coTWF0aC5tYXgoMCx3LTEpLDEuMTQpKi4wMjI7CisgIGNvbnN0IGV4cCA9IHcgPD0gNSA/IC4xOCA6IHcgPD0gOSA/IC4yMiA6IHcgPD0gMTQgPyAuMjggOiB3IDw9IDI0ID8gLjM0IDogLjQwOworICBjb25zdCBidWlsZCA9IE1hdGgucG93KE1hdGgubWF4KDEscS5kcHNSYXRpbyksIGV4cCkgKiAoMSArIE1hdGgubWF4KDAscS5kZWZlbnNlLTEpKi4wNTUpOworICBjb25zdCB2ZXRlcmFuID0gdyA8PSAxNCA/IDEgOiAxICsgTWF0aC5taW4oLjM4LCAody0xNCkqLjAwOSk7CisgIHJldHVybiBzZWN0b3IgKiBidWlsZCAqIHZldGVyYW47CiB9CiBmdW5jdGlvbiBlbmVteURhbWFnZVNjYWxlKCl7Ci0gIGNvbnN0IHEgPSBwbGF5ZXJQb3dlclByb2ZpbGUoKTsKLSAgY29uc3QgZWFybHlQb3dlciA9IEcud2F2ZSA8PSA5ID8gLjA1NSA6IEcud2F2ZSA8PSAxNCA/IC4wNjQgOiAuMDc7Ci0gIGNvbnN0IGNhcCA9IEcud2F2ZSA8PSA5ID8gMS40NiA6IEcud2F2ZSA8PSAxNCA/IDEuNTggOiAxLjY4OwotICByZXR1cm4gY2xhbXAoMSArIE1hdGgubWF4KDAsRy53YXZlLTIpKi4wMTQgKyBxLnByZXNzdXJlKmVhcmx5UG93ZXIgKyBNYXRoLm1heCgwLHEuZGVmZW5zZS0xKSouMDQ1LCAxLCBjYXApOworICBjb25zdCBxID0gcGxheWVyUG93ZXJQcm9maWxlKCksIHcgPSBHLndhdmU7CisgIC8qIERhbm8gc29iZSBtYWlzIG5vIGVuZGdhbWUsIG1hcyBjb250aW51YSBjb20gdGV0byBleHBsw61jaXRvLiBBIGRpZmljdWxkYWRlCisgICAgIHZlbSBkZSBzb2JyZXZpdmVyIGFvcyBwYWRyw7VlcywgbsOjbyBkZSB1bSBwcm9qw6l0aWwgYWxlYXTDs3JpbyBkYXIgb25lLXNob3QuICovCisgIGNvbnN0IGNhcCA9IHcgPD0gOSA/IDEuNDYgOiB3IDw9IDE0ID8gMS42MCA6IHcgPD0gMjQgPyAxLjc4IDogdyA8PSAzOSA/IDEuOTIgOiAyLjA1OworICByZXR1cm4gY2xhbXAoMSArIE1hdGgubWF4KDAsdy0yKSouMDE2ICsgcS5wcmVzc3VyZSouMDc1ICsgTWF0aC5tYXgoMCxxLmRlZmVuc2UtMSkqLjA1LCAxLCBjYXApOwogfQogZnVuY3Rpb24gZWxpdGVIcE11bHQoKXsKICAgaWYoRy53YXZlIDw9IDUpIHJldHVybiAyLjI1OwogICBpZihHLndhdmUgPD0gOSkgcmV0dXJuIDIuNTU7Ci0gIGlmKEcud2F2ZSA8PSAxNCkgcmV0dXJuIDIuODU7Ci0gIHJldHVybiAzLjE1OworICBpZihHLndhdmUgPD0gMTQpIHJldHVybiAzLjAwOworICBpZihHLndhdmUgPD0gMjQpIHJldHVybiAzLjQ1OworICBpZihHLndhdmUgPD0gMzkpIHJldHVybiAzLjgwOworICByZXR1cm4gNC4xNTsKIH0KIGZ1bmN0aW9uIGJvc3NUZW1wb1NjYWxlKCl7CiAgIGNvbnN0IHEgPSBwbGF5ZXJQb3dlclByb2ZpbGUoKTsKQEAgLTMxODEsNyArMzE4Nyw3IEBACiBmdW5jdGlvbiB1cGRhdGVFbmVtaWVzKGR0KXsKICAgY29uc3QgcCA9IEcucGxheWVyOwogICBjb25zdCBzbSA9IG1vZFNwZWVkKCk7Ci0gIGNvbnN0IHdmID0gKDEgKyBHLndhdmUqLjAxMikgKiBzbTsKKyAgY29uc3Qgd2YgPSAoMSArIE1hdGgubWluKDEuMDUsIEcud2F2ZSouMDE2KSkgKiBzbTsKICAgZm9yKGNvbnN0IGUgb2YgRy5lbmVtaWVzKXsKICAgICBpZihlLmRlYWQpIGNvbnRpbnVlOwogICAgIGUudCArPSBkdDsKQEAgLTQwNjMsOCArNDA2OSwxMCBAQAogICAgIGNvbnN0IHJhbXBDb3VudCA9IDQgKyBHLndhdmUqLjU4ICsgcHJlc3N1cmUqLjUwOwogICAgIGNvbnN0IGJyaWRnZUVhc2UgPSAoRy53YXZlID49IDcgJiYgRy53YXZlIDw9IDkpID8gLjkyIDogMTsKICAgICBjb25zdCBjb3VudCA9IGNsYW1wKE1hdGgucm91bmQocmFtcENvdW50ICogbWMgKiBicmlkZ2VFYXNlKSwgMywgMTgpOwotICAgIGNvbnN0IGJhc2VFbGl0ZSA9IE1hdGgubWluKC4wMjUgKyBHLndhdmUqLjAwOTUgKyBwcmVzc3VyZSouMDEwLCAuMjIpOwotICAgIGNvbnN0IGVsaXRlQ2hhbmNlID0gTWF0aC5taW4oLjM0LCBiYXNlRWxpdGUgKyAoKEcubW9kICYmIEcubW9kLmVsaXRlKSB8fCAwKSk7CisgICAgY29uc3QgZWxpdGVCYXNlQ2FwID0gRy53YXZlIDw9IDE0ID8gLjIyIDogRy53YXZlIDw9IDI0ID8gLjI2IDogLjMwOworICAgIGNvbnN0IGVsaXRlQ2FwID0gRy53YXZlIDw9IDE0ID8gLjM0IDogRy53YXZlIDw9IDI0ID8gLjQyIDogLjQ4OworICAgIGNvbnN0IGJhc2VFbGl0ZSA9IE1hdGgubWluKC4wMjUgKyBHLndhdmUqLjAwOTUgKyBwcmVzc3VyZSouMDEwLCBlbGl0ZUJhc2VDYXApOworICAgIGNvbnN0IGVsaXRlQ2hhbmNlID0gTWF0aC5taW4oZWxpdGVDYXAsIGJhc2VFbGl0ZSArICgoRy5tb2QgJiYgRy5tb2QuZWxpdGUpIHx8IDApKTsKICAgICBpZihwYXR0ZXJuID09PSAnc3dlZXAnKXsKICAgICAgIGNvbnN0IHJldiA9IE1hdGgucmFuZG9tKCkgPCAuNTsKICAgICAgIGZvcihsZXQgaT0wO2k8Y291bnQ7aSsrKXsKQEAgLTU4MTQsNyArNTgyMiw3IEBACiAKIC8qIFRvZG8gYXRhcXVlIHByaW5jaXBhbCB0ZW0gdW1hIHByZXBhcmHDp8OjbyBlIHVtIGZpbSBjb25oZWNpZG9zIHBlbG8gZGlyZXRvci4gKi8KIGZ1bmN0aW9uIGRlY2FBdHRhY2soaWQsbGFiZWwsaGludCxhY3RpdmUscnVuLG9wdGlvbnM9e30pewotICByZXR1cm4gT2JqZWN0LmFzc2lnbih7aWQsbGFiZWwsaGludCx3YXJuOjEsYWN0aXZlLHJlY292ZXJ5OjEuMSxydW4scHJlcGFyZTooYixzKT0+KHt0YXJnZXQ6cyxsaW5lczpkZWNhTGluZXMoYixzKX0pLHNjb3JlOigpPT4xfSxvcHRpb25zKTsKKyAgcmV0dXJuIE9iamVjdC5hc3NpZ24oe2lkLGxhYmVsLGhpbnQsd2FybjoxLGFjdGl2ZSxyZWNvdmVyeTouOTAscnVuLHByZXBhcmU6KGIscyk9Pih7dGFyZ2V0OnMsbGluZXM6ZGVjYUxpbmVzKGIscyl9KSxzY29yZTooKT0+MX0sb3B0aW9ucyk7CiB9CiBjb25zdCBERUNBX0FUVEFDS1M9e307CiAKQEAgLTYwNzEsOSArNjA3OSwxNSBAQAogICBHLmJvc3NQZW5kaW5nPWZhbHNlOwogICBjb25zdCBraW5kPUcucHJhY3RpY2UmJkJPU1NFU1tHLnByYWN0aWNlS2luZF0/Ry5wcmFjdGljZUtpbmQ6Ym9zc0tpbmRGb3IoRy53YXZlKSxkZWY9Qk9TU0VTW2tpbmRdOwogICBjb25zdCBtaz1NYXRoLm1heCgxLE1hdGguY2VpbChHLndhdmUvNSkpLHE9cGxheWVyUG93ZXJQcm9maWxlKCk7Ci0gIC8qIExpbWl0ZSBleHBsw61jaXRvOiBhIHByb2dyZXNzw6NvIGRvIHBpbG90byBtYW50w6ltIHZhbnRhZ2VtIHJlYWwuICovCi0gIGNvbnN0IGJhc2U9MzAwMCtNYXRoLm1pbig5LG1rLTEpKjYwMCtNYXRoLnNxcnQoTWF0aC5taW4oMzYsTWF0aC5tYXgoMCxxLmRwc1JhdGlvLTEpKSkqODUwOwotICBjb25zdCBocD0oRy5wcmFjdGljZT81MDAwOmNsYW1wKGJhc2UsMzAwMCwxMzUwMCkpKmRlZi5ocE11bHQ7CisgIC8qIEhBUkRMSU5FIHYxNCDigJQgbyB0ZXRvIGRlIDEzLjUwMCBkbyB2MTMgZmF6aWEgcXVhbHF1ZXIgYnVpbGQgbWFkdXJhCisgICAgIGFwYWdhciBvcyBjaGVmZXMgbm92b3MuIE8gY2FzY28gYWdvcmEgYWNvbXBhbmhhIG8gRFBTIGVtIHBvdMOqbmNpYSAwLDQ3OgorICAgICDDqSBwcm9wb3NpdGFsbWVudGUgc3VibGluZWFyLCBlbnTDo28gZmljYXIgZm9ydGUgQUlOREEgZW5jdXJ0YSBhIGx1dGEsIG1hcworICAgICBuZW5odW0gY29tYW5kYW50ZSB2aXJhIHVtIGFsdm8gZGUgcG91Y29zIHNlZ3VuZG9zIG5vIHNldG9yIDMwKy4gKi8KKyAgY29uc3Qgd2F2ZUJhc2UgPSA0MjAwICsgRy53YXZlKjE4NSArIE1hdGgucG93KE1hdGgubWF4KDEsRy53YXZlKSwxLjE4KSozODsKKyAgY29uc3QgYnVpbGRTY2FsZSA9IE1hdGgucG93KE1hdGgubWF4KDEscS5kcHNSYXRpbyksIC40Nyk7CisgIGNvbnN0IG1rU2NhbGUgPSAxICsgTWF0aC5tYXgoMCxtay0xKSouMDM1OworICBjb25zdCByYXdCb3NzSHAgPSB3YXZlQmFzZSAqIGJ1aWxkU2NhbGUgKiBta1NjYWxlOworICBjb25zdCBocD0oRy5wcmFjdGljZT85MDAwOmNsYW1wKHJhd0Jvc3NIcCw2MjAwLDExNTAwMCkpKmRlZi5ocE11bHQ7CiAgIGNvbnN0IHBoYXNlPUcucHJhY3RpY2U/Y2xhbXAoRy5wcmFjdGljZVBoYXNlfDB8fDEsMSwzKToxOwogICBjb25zdCBiPXtpZDpuZXh0SWQrKyxraW5kLGRlZix4OlYudy8yLHk6LTI0MCxob2xkWTpWLmgqKFYucG9ydHJhaXQ/LjM0Oi4zMikscjpkZWYucixocCxtYXhIcDpocCwKICAgICBwaGFzZSxsYXN0UGhhc2U6cGhhc2UscHJhY3RpY2VQaGFzZTpHLnByYWN0aWNlP3BoYXNlOjAsdDowLGNkOjEuMixhcnJpdmVkOmZhbHNlLGZsYXNoOjAsZGVhZDpmYWxzZSxyb3Q6MCxwYXJ0czpbXSxyYW06bnVsbCxpbnRybzowLApAQCAtNjA5NywxNCArNjExMSwxNCBAQAogICBpZighYi5hcnJpdmVkKXsKICAgICBiLmVudHJ5VCs9ZHQ7Y29uc3QgdD1jbGFtcChiLmVudHJ5VC8xLjU1LDAsMSksZWFzZT0xLU1hdGgucG93KDEtdCwzKTsKICAgICBiLnk9bGVycCgtMjQwLGIuaG9sZFksZWFzZSk7ZGVjYVBsYWNlUGFydHMoYixkdCk7Ci0gICAgaWYodD49MSl7Yi5hcnJpdmVkPXRydWU7Yi5hdHRhY2tTdGF0ZT0ncmVjdXBlcmFyJztiLmF0dGFja0xhYmVsPSdOw7pjbGVvIGVtIHBvc2nDp8Ojbyc7Yi5hdHRhY2tIaW50PWIuZGVmLnJ1bGU7Yi5hdHRhY2tVbnRpbD1HLmNsb2NrKzEuMTtiLmNkPTEuMTt9CisgICAgaWYodD49MSl7Yi5hcnJpdmVkPXRydWU7Yi5hdHRhY2tTdGF0ZT0ncmVjdXBlcmFyJztiLmF0dGFja0xhYmVsPSdOw7pjbGVvIGVtIHBvc2nDp8Ojbyc7Yi5hdHRhY2tIaW50PWIuZGVmLnJ1bGU7Yi5hdHRhY2tVbnRpbD1HLmNsb2NrKy45MDtiLmNkPS45MDt9CiAgICAgcmV0dXJuOwogICB9CiAgIGNvbnN0IHBoYXNlPWIucHJhY3RpY2VQaGFzZXx8KGIuaHAvYi5tYXhIcD4uNjY/MTpiLmhwL2IubWF4SHA+LjMzPzI6Myk7CiAgIGlmKHBoYXNlIT09Yi5sYXN0UGhhc2UpewogICAgIGIucGhhc2U9cGhhc2U7Yi5sYXN0UGhhc2U9cGhhc2U7Yi5hdHRhY2tUb2tlbisrO2NsZWFyRXZlbnRzKCdib3NzJyk7Ry5sYXNlcnMubGVuZ3RoPTA7Y2xlYXJCdWxsZXRzKGZhbHNlKTsKICAgICBiLnJhbT1udWxsO2IuaW50ZW50PW51bGw7Yi5naG9zdHM9bnVsbDtiLmF0dGFjaz1udWxsO2IuYXR0YWNrU3RhdGU9J3RyYW5zacOnw6NvJztiLmF0dGFja0xhYmVsPSdGYXNlICcrcGhhc2UrJyDCtyByZWNvbmZpZ3VyYW5kbyc7Yi5hdHRhY2tIaW50PSdPIG7DumNsZW8gZXN0w6EgZXhwb3N0byBkdXJhbnRlIGEgbXVkYW7Dp2EgZGUgZm9ybWHDp8Ojby4nOwotICAgIGIuYXR0YWNrVW50aWw9Ry5jbG9jaysxLjI1O2IuY2Q9MS4yNTsKKyAgICBiLmF0dGFja1VudGlsPUcuY2xvY2srMS4wNTtiLmNkPTEuMDU7CiAgICAgQXVkaW8yLmJvc3NQaGFzZShwaGFzZSxiLngpO0F1ZGlvMi5tdXNpY1BoYXNlU3RpbmdlcihwaGFzZSk7cmluZyhiLngsYi55LDE4MCwuNywnIzdiNWNmZicsNSk7dG9hc3QoJ0ZBU0UgJytwaGFzZSsnIMK3IFJFQ09ORklHVVJBTkRPJywnI2EwN2NmZicsMTIwMCk7CiAgIH0KICAgYi5kZWYubW92ZShiLGR0KTtkZWNhUGxhY2VQYXJ0cyhiLGR0KTsKQEAgLTYxMjAsOSArNjEzNCwxMyBAQAogICBpZihiLmF0dGFja1N0YXRlPT09J2V4ZWN1dGFyJyl7CiAgICAgYi5hdHRhY2tTdGF0ZT0ncmVjdXBlcmFyJztiLmludGVudD1udWxsO2IuZ2hvc3RzPW51bGw7Yi5hdHRhY2tMYWJlbD0nUmVjdXBlcmHDp8OjbyDCtyBhdGFxdWUgYXMgcGXDp2FzJzsKICAgICBiLmF0dGFja0hpbnQ9J0phbmVsYSBkZSBkZXNtb250YWdlbS4gTyBwcsOzeGltbyBhdGFxdWUgYWluZGEgbsOjbyBmb2kgZXNjb2xoaWRvLic7Ci0gICAgYi5hdHRhY2tVbnRpbD1HLmNsb2NrKyhiLmF0dGFjaz8ucmVjb3Zlcnl8fDEuMSkrKDMtYi5waGFzZSkqLjEwO2IuYXR0YWNrPW51bGw7cmV0dXJuOworICAgIGNvbnN0IG1rPU1hdGgubWF4KDEsTWF0aC5jZWlsKEcud2F2ZS81KSk7CisgICAgY29uc3QgcGhhc2VSZWNvdmVyeT1iLnBoYXNlPT09MT8xOmIucGhhc2U9PT0yPy44ODouNzY7CisgICAgY29uc3QgbGF0ZVByZXNzdXJlPU1hdGgubWF4KC43NiwxLShtay0xKSouMDEyKTsKKyAgICBjb25zdCByZWNvdmVyeT0oYi5hdHRhY2s/LnJlY292ZXJ5fHwuOTApKnBoYXNlUmVjb3ZlcnkqbGF0ZVByZXNzdXJlOworICAgIGIuYXR0YWNrVW50aWw9Ry5jbG9jaytyZWNvdmVyeSsoMy1iLnBoYXNlKSouMDY7Yi5hdHRhY2s9bnVsbDtyZXR1cm47CiAgIH0KLSAgaWYoRy5lYi5sZW5ndGg+ZW5lbXlCdWxsZXRDYXAoKSouNjB8fEcubGFzZXJzLmxlbmd0aCl7Yi5hdHRhY2tVbnRpbD1HLmNsb2NrKy4yNTtiLmF0dGFja1N0YXRlPSdyZWN1cGVyYXInO3JldHVybjt9CisgIGlmKEcuZWIubGVuZ3RoPmVuZW15QnVsbGV0Q2FwKCkqLjcyfHxHLmxhc2Vycy5sZW5ndGgpe2IuYXR0YWNrVW50aWw9Ry5jbG9jaysuMjI7Yi5hdHRhY2tTdGF0ZT0ncmVjdXBlcmFyJztyZXR1cm47fQogICBkZWNhU2VsZWN0KGIpOwogfTsKIApAQCAtNjQ1NCw3ICs2NDcyLDcgQEAKIGZ1bmN0aW9uIGZpeGVkUHJhY3RpY2VQbGF5ZXJWMTMoKXsKICAgY29uc3QgcD1tYWtlUGxheWVyKCk7CiAgIE9iamVjdC5hc3NpZ24ocCx7Ci0gICAgeDpWLncvMix5OlYuaCouNzksdng6MCx2eTowLHI6MjAsaGl0Ujo4LHRpbHQ6MCxhbGl2ZTp0cnVlLAorICAgIHg6Vi53LzIseTpWLmgqLjc5LHZ4OjAsdnk6MCxyOjIwLGhpdFI6Nix0aWx0OjAsYWxpdmU6dHJ1ZSwKICAgICBtYXhIcDoyMjAsaHA6MjIwLGRhbWFnZToyNixmaXJlR2FwOi4xMyxmaXJlVDowLGJ1bGxldFNwZWVkOjEwMDAsc3BlZWQ6NTIwLAogICAgIG11bHRpc2hvdDoxLHNwcmVhZDouMTE1LHBpZXJjZToxLGNyaXQ6LjEwLGNyaXRNdWx0OjIsCiAgICAgY2hhaW46MCxjaGFpbkRtZzouNDgsaG9taW5nOjAsbWlzc2lsZXM6MCxtaXNzaWxlTjowLGRyb25lczowLAo=',validate=True)
+          if sha256(p14)!='e63fc0dda6c7a7b9bcfb662ecd47df6ae0d1a283d08e2b4246bdbad2e9d39c09':raise SystemExit('v14 patch mismatch')
+          subprocess.run(['patch','-s','game.html'],input=p14,cwd=work,check=True)
+          v14=target.read_bytes();h=sha256(v14)
+          if h!='24d703148e58b2ddf8003202fdc399f7aa72ade73305955d00a4f953ea76c4f8':raise SystemExit('v14 HTML mismatch: '+h)
+          text=v14.decode('utf-8');required=['Deca Protocol v14 · Hardline','HARDLINE v14','hitR:6','115000','Dossiê · treinar chefes','5 espaços de save','MUSIC v10 LOUD']
+          missing=[x for x in required if x not in text]
+          if missing:raise SystemExit('v14 content gate failed: '+repr(missing))
+          out=Path('site');out.mkdir(exist_ok=True);(out/'index.html').write_bytes(v14)
+          print('HARDLINE v14 bytes:',len(v14));print('HARDLINE v14 SHA256:',h)
           PY
-
       - name: Configure Pages
         uses: actions/configure-pages@v5
-
       - name: Upload playable site
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./site
-
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
 
-# deploy marker: deca-protocol-v13-canonical-21fae3b1
+# deploy marker: hardline-v14-canonical-24d70314
