@@ -35,12 +35,13 @@ jobs:
           import base64, gzip, hashlib
 
           root = Path('neon-strike-eclipse/build-v10')
-          # Filename 1/2 were uploaded swapped. Tuple order below is the
-          # original payload order and includes exact SHA-256 validation.
+          # payload_1 from the first upload was corrupted. The exact original
+          # chunk is now stored safely as payload_1a + payload_1b.
           targets = [
               ('payload_0.txt',  '52780834d239334cc940a5a8ad4e371f03281cf2312050eba4f70d6befe892d8'),
               ('payload_2.txt',  '55e57ae348a0b72cd8b38bae7dfacb31082c8aef08c5c2aea3c4291a686f8965'),
-              ('payload_1.txt',  '51ed5adc1639995da30f7b737cd578924abc25048fdab1b2a90bedfe54599e4f'),
+              ('payload_1a.txt', 'ea339fef8674ae998e27d05dad797d02224b393b75f8bba3cc7202b65d1e5c1d'),
+              ('payload_1b.txt', '8284f4253b17ff2f2e1ce0c9f481b2aada710adddde356d94726b8ac184779ce'),
               ('payload_3.txt',  'de0eb239e9cfc1badb2adaf2e7971b5e25fab5f45f1fd6141537d6a2e1e86ccd'),
               ('payload_4a.txt', 'f42c439e2110d46c8d1a1b758c68ba5b964b22c53957535f78198aa7a32548bf'),
               ('payload_4b.txt', 'd34065e1a0b520ba01d42f232101dd5f7e66b26d14e1175befd68d2ef753302f'),
