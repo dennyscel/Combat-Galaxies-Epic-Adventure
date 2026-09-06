@@ -41,7 +41,7 @@ jobs:
               text = ''.join(''.join((root / n).read_text(encoding='utf-8-sig').split()) for n in names)
               return gzip.decompress(base64.b64decode(text, validate=True))
 
-          # 1) Rebuild the validated v10 source.
+          # 1) Rebuild validated v10.
           root = Path('neon-strike-eclipse/build-v10')
           targets = [
               ('payload_0.txt',  '52780834d239334cc940a5a8ad4e371f03281cf2312050eba4f70d6befe892d8'),
@@ -71,7 +71,7 @@ jobs:
           target = work / 'game.html'
           target.write_bytes(v10)
 
-          # 2) Apply validated Cycle Save v11.
+          # 2) Cycle Save v11.
           v11_root = Path('neon-strike-eclipse/build-v11-patch')
           v11_patch = b''.join((v11_root / f'patch_{i:02d}.txt').read_bytes() for i in range(12))
           if sha256(v11_patch) != 'bc4ed3a586bb2924650ad1b1c9ede8c5f6456a795cbdad0c41fc2984c13a298e':
@@ -81,7 +81,7 @@ jobs:
           if sha256(v11) != 'a2286dff4fc4816e80c1b780555b2e7d05738f8636c7ad13600143e53da1aa00':
               raise SystemExit(f'v11 HTML mismatch: {sha256(v11)}')
 
-          # 3) Apply v12 art/direction patch.
+          # 3) v12 art/direction.
           v12_root = Path('neon-strike-eclipse/build-v13')
           v12_patch = b64gzip_chunks(v12_root, ['v12_patch_00.b64', 'v12_patch_01.b64'])
           subprocess.run(['patch', '-s', 'game.html'], input=v12_patch, cwd=work, check=True)
@@ -90,16 +90,24 @@ jobs:
           if sha256(v12) != expected_v12:
               raise SystemExit(f'v12 HTML mismatch: {sha256(v12)}')
 
-          # 4) Apply exact current Deca v13 patch (five complete chunks).
+          # 4) Exact Deca v13 delta. The source patch intentionally represents
+          # a target without a final newline, so GNU patch needs one terminator
+          # for parsing. After applying, line endings are restored byte-for-byte.
           deca_root = Path('neon-strike-eclipse/build-v13-exact')
           deca_names = [f'deca_patch_{i:02d}.b64' for i in range(5)]
           deca_patch = b64gzip_chunks(deca_root, deca_names)
           expected_patch = 'c769934f2f022f3b180612958aaec04aa90b3c08acfc461dab12d874eb6959b8'
           if sha256(deca_patch) != expected_patch:
               raise SystemExit(f'Deca patch mismatch: {sha256(deca_patch)}')
-          subprocess.run(['patch', '-s', 'game.html'], input=deca_patch, cwd=work, check=True)
+          patch_input = deca_patch if deca_patch.endswith(b'\n') else deca_patch + b'\n'
+          subprocess.run(['patch', '-s', 'game.html'], input=patch_input, cwd=work, check=True)
 
-          v13 = target.read_bytes()
+          # GNU patch writes LF. The owner's canonical v13 is CRLF and has no
+          # final newline. Restore that exact byte representation and verify SHA.
+          v13_lf = target.read_bytes()
+          v13 = v13_lf.replace(b'\n', b'\r\n')
+          if v13.endswith(b'\r\n'):
+              v13 = v13[:-2]
           v13_sha = sha256(v13)
           expected_v13 = '21fae3b16af1affcbb6af8e87995db04e1e680f5f24d00cfd2bbb0bdce161919'
           if v13_sha != expected_v13:
@@ -139,4 +147,4 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-# deploy marker: deca-protocol-v13-exact-21fae3b1-complete
+# deploy marker: deca-protocol-v13-canonical-21fae3b1
