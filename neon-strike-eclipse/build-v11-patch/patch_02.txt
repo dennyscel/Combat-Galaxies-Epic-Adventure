@@ -1,0 +1,33 @@
+ pode retomar do setor 51 com a nave e a construção que tinha ao entrar naquele ciclo, ou recomeçar do zero.</span></div>
+           <div class="note"><b>Evoluções · 1, 2 e 3</b><span>A cada nível aparecem três cartas. Dá para escolher pelo toque, pelo clique ou pelas teclas numéricas.</span></div>
+         </div>
+         <div class="rule"></div>
+@@ -561,6 +565,17 @@
+       </div>
+     </section>
+ 
++    <!-- SAVES DE CICLO -->
++    <section id="ov-slots" class="ov hidden">
++      <div class="card md">
++        <p class="eyebrow">Checkpoint de ciclo</p>
++        <h2>5 espaços de save</h2>
++        <p class="lede">Cada espaço guarda a construção no começo do ciclo atual. O save acontece só nos setores 1, 6, 11, 16… para não transformar a partida em save a cada onda.</p>
++        <div id="slot-list" class="notes"></div>
++        <div class="acts mid"><button id="b-slots-back" class="btn pri">Voltar</button></div>
++      </div>
++    </section>
++
+     <!-- GAME OVER -->
+     <section id="ov-over" class="ov hidden">
+       <div class="card sm">
+@@ -579,8 +594,10 @@
+           <div class="field"><input id="rank-name" maxlength="14" placeholder="Nome do piloto" autocomplete="off" spellcheck="false"></div>
+           <button id="b-rank-save" class="btn pri wide" style="margin-top:10px">Salvar recorde</button>
+         </div>
++        <p id="cycle-info" class="lede" style="margin:12px auto 0"></p>
+         <div class="acts mid" style="margin-top:16px">
+-          <button id="b-retry" class="btn pri">Tentar de novo</button>
++          <button id="b-cycle" class="btn pri">Retomar ciclo</button>
++          <button id="b-retry" class="btn">Voltar ao início</button>
+           <button id="b-over-meta" class="btn">Hangar</button>
+           <button id="b-over-menu" class="btn">Menu</b
