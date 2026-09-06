@@ -27,7 +27,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build Deca Protocol v13 from validated chain
+      - name: Build exact Deca Protocol v13
         shell: bash
         run: |
           python3 - <<'PY'
@@ -71,7 +71,7 @@ jobs:
           target = work / 'game.html'
           target.write_bytes(v10)
 
-          # 2) Apply the validated Cycle Save v11 patch.
+          # 2) Apply validated Cycle Save v11.
           v11_root = Path('neon-strike-eclipse/build-v11-patch')
           v11_patch = b''.join((v11_root / f'patch_{i:02d}.txt').read_bytes() for i in range(12))
           if sha256(v11_patch) != 'bc4ed3a586bb2924650ad1b1c9ede8c5f6456a795cbdad0c41fc2984c13a298e':
@@ -81,23 +81,30 @@ jobs:
           if sha256(v11) != 'a2286dff4fc4816e80c1b780555b2e7d05738f8636c7ad13600143e53da1aa00':
               raise SystemExit(f'v11 HTML mismatch: {sha256(v11)}')
 
-          # 3) Apply the v12 art/direction patch already stored in the repo.
-          v13_root = Path('neon-strike-eclipse/build-v13')
-          v12_patch = b64gzip_chunks(v13_root, ['v12_patch_00.b64', 'v12_patch_01.b64'])
+          # 3) Apply v12 art/direction patch.
+          v12_root = Path('neon-strike-eclipse/build-v13')
+          v12_patch = b64gzip_chunks(v12_root, ['v12_patch_00.b64', 'v12_patch_01.b64'])
           subprocess.run(['patch', '-s', 'game.html'], input=v12_patch, cwd=work, check=True)
           v12 = target.read_bytes()
-          print('v12 bytes:', len(v12), 'sha256:', sha256(v12))
+          expected_v12 = '5c225395e94f41e0753aa8d9ead8c7b3ef146e925c8b82729e5db339de3c2c16'
+          if sha256(v12) != expected_v12:
+              raise SystemExit(f'v12 HTML mismatch: {sha256(v12)}')
 
-          # 4) Apply the Deca Protocol patch: ten bosses, dossier and practice mode.
-          deca_patch = b64gzip_chunks(v13_root, ['deca_patch_00.b64', 'deca_patch_01.b64'])
+          # 4) Apply exact current Deca v13 patch (five complete chunks).
+          deca_root = Path('neon-strike-eclipse/build-v13-exact')
+          deca_names = [f'deca_patch_{i:02d}.b64' for i in range(5)]
+          deca_patch = b64gzip_chunks(deca_root, deca_names)
+          expected_patch = 'c769934f2f022f3b180612958aaec04aa90b3c08acfc461dab12d874eb6959b8'
+          if sha256(deca_patch) != expected_patch:
+              raise SystemExit(f'Deca patch mismatch: {sha256(deca_patch)}')
           subprocess.run(['patch', '-s', 'game.html'], input=deca_patch, cwd=work, check=True)
+
           v13 = target.read_bytes()
           v13_sha = sha256(v13)
           expected_v13 = '21fae3b16af1affcbb6af8e87995db04e1e680f5f24d00cfd2bbb0bdce161919'
           if v13_sha != expected_v13:
               raise SystemExit(f'Deca v13 HTML mismatch: {v13_sha}')
 
-          # Lightweight content gates for the exact build requested by the owner.
           text = v13.decode('utf-8')
           required = [
               'Deca Protocol v13',
@@ -117,8 +124,7 @@ jobs:
           (out / 'index.html').write_bytes(v13)
           print('DECA PROTOCOL v13 bytes:', len(v13))
           print('DECA PROTOCOL v13 SHA256:', v13_sha)
-          print('v12 patch SHA256:', sha256(v12_patch))
-          print('deca patch SHA256:', sha256(deca_patch))
+          print('Deca exact patch SHA256:', sha256(deca_patch))
           PY
 
       - name: Configure Pages
@@ -133,4 +139,4 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-# deploy marker: deca-protocol-v13-exact-21fae3b1
+# deploy marker: deca-protocol-v13-exact-21fae3b1-complete
